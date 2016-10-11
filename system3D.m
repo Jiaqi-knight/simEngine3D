@@ -20,7 +20,7 @@ classdef system3D < handle
     
     methods
         function sys = system3D() %constructor function
-            sys.body = {};
+            sys.body = {}; % no bodies defined yet
         end
     end
     methods (Access = public)
@@ -52,19 +52,33 @@ classdef system3D < handle
             for i = 1:sys.nBodies % plot bodies in system
                 
                 % plot marker for every body
-                r = [sys.bodies{i}.r(1);sys.bodies{i}.r(2);sys.bodies{i}.r(3)];
-                scatter3(r(1),r(2),r(3));
+                r = [sys.body{i}.r(1);sys.body{i}.r(2);sys.body{i}.r(3)];
+                scatter3(r(1),r(2),r(3),500);
                 
                 if frames %optionally plot body reference frames
-                    plot.drawframe(sys.bodies{i}.r,sys.bodies{i}.p)
+                    plot.drawframe(sys.body{i}.r,sys.body{i}.p)
                 end
                 
                 % add body labels
-                r = r + 0.05; %adjust so label is not right over point
-                text(r(1),r(2),r(3),num2str(sys.bodies{i}.ID));
+                r_text = r + 0.05; %adjust so label is not right over body origin
+                text(r_text(1),r_text(2),r_text(3),num2str(sys.body{i}.ID));
+                
+                % if points on body, plot them.
+                if sys.body{i}.nPoints ~= 0
+                    for j = 1:sys.body{i}.nPoints % plot bodies in system
+                        sbar = [sys.body{i}.point{j}(1);sys.body{i}.point{j}(2);sys.body{i}.point{j}(3)]; % local position of point
+                        Asbar = utility.p2A(sys.body{i}.p)*sbar; % rotated to global rf
+                        rAsbar = r + Asbar; % global position of point
+                        
+                        plot3([r(1); rAsbar(1)],[r(2); rAsbar(2)],[r(3); rAsbar(3)],'ks-') % line from BODY RF to point
+                        
+                        % add point labels
+                        rAsbar_text = rAsbar + 0.05; %adjust so label is not right over point
+                        text(rAsbar_text(1),rAsbar_text(2),rAsbar_text(3),num2str(j));
+                    end
+                end
             end
             hold off;
-            
         end
     end
     methods % methods block with no attributes

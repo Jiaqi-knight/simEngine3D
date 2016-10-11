@@ -12,16 +12,32 @@ classdef body3D < handle
       p; % = [e0;e1;e2;e3] euler parameters of BODY RF
       m; % mass of the part
       J; % inertia tensor of the part
-      points; % collection of points on the body, defined in BODY RF
+      point; % structure of points on the body, defined in BODY RF
    end
-   
-   methods
+   properties (Dependent)
+       nPoints; % number of points on the body
+   end
+   methods (Access = public)
        function body = body3D(ID,r,p) %constructor function
             body.ID = ID;
             body.r = r;
-            body.p = p;    
+            body.p = p;
+            body.point = {}; % no points defined yet
        end
+        function addPoint(body,r) % add a body to the system
+            % inputs:
+            %    - body: body you are adding point to
+            %    - r: [3x1] position of point in BODY RF
+            if nargin < 2
+                r = [0;0;0]; % point located at origin of body
+            end
+            body.point{body.nPoints+1} = r;
+        end
 
-
+   end
+   methods % methods block with no attributes
+       function nPoints = get.nPoints(body) % calculate number of bodies in system
+           nPoints = length(body.point);
+       end
    end
 end 
