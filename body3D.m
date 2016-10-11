@@ -1,4 +1,4 @@
-classdef body < handle
+classdef body3D < handle
     % Filename: body.m
     % Author:   Samuel Acuña
     % Date:     11 Oct 2016
@@ -12,10 +12,11 @@ classdef body < handle
       p; % = [e0;e1;e2;e3] euler parameters of BODY RF
       m; % mass of the part
       J; % inertia tensor of the part
+      points; % collection of points on the body, defined in BODY RF
    end
    
    methods
-       function body = body(ID,r,p) %constructor function
+       function body = body3D(ID,r,p) %constructor function
             body.ID = ID;
             body.r = r;
             body.p = p;    

@@ -11,7 +11,7 @@ classdef system3D < handle
         % RF = struct('O',[0;0;0],'X',[1;0;0], 'Y',[0;1;0], 'Z',[0;0;1]); 
         r = [0;0;0]; % Global Reference Frame
         p = [1;0;0;0]; % Global Euler Parameters
-        bodies; % collection of bodies in the system
+        body; % collection of bodies in the system
     end
     
     properties (Dependent)
@@ -20,7 +20,7 @@ classdef system3D < handle
     
     methods
         function sys = system3D() %constructor function
-            sys.bodies = {};
+            sys.body = {};
         end
     end
     methods (Access = public)
@@ -33,11 +33,11 @@ classdef system3D < handle
                 p = [1;0;0;0]; % no change in body orientation from GLOBAL RF
             end
             if nargin < 2
-                r = [0;0;0] % body located at origin
+                r = [0;0;0]; % body located at origin
             end
             
             ID = sys.nBodies+1; %body ID number
-            sys.bodies{ID} = body(ID,r,p); % new instance of the body class
+            sys.body{ID} = body3D(ID,r,p); % new instance of the body class
         end
         function plot(sys,frames) % plots the bodies in the system
             if nargin == 1
@@ -69,7 +69,7 @@ classdef system3D < handle
     end
     methods % methods block with no attributes
         function nBodies = get.nBodies(sys) % calculate number of bodies in system
-            nBodies = length(sys.bodies);
+            nBodies = length(sys.body);
         end
     end
 end
