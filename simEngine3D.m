@@ -16,15 +16,19 @@ sys = system3D(); %initialize system
 
 
 %% DEFINE BODIES IN THE SYSTEM %%
-sys.addBody([10;0;0]) % body 1
-sys.addBody([5;20;7]) % body 2
+sys.addBody([1;1;1]) % body 1
+sys.addBody([1;1;0]) % body 2
 
 %% DEFINE POINTS ON THE BODIES %%
-sys.body{1}.addPoint([2;2;2])
+sys.body{1}.addPoint([1;0;0]) % point 1, body 1
+sys.body{1}.addPoint([0;0;0]); % point 2, body 1
+sys.body{2}.addPoint([0;1;0]) % point 1, body 1
+sys.body{2}.addPoint([0;0;0]); % point 2, body 1
 
 %% PLOT THE SYSTEM %%
 % sys.plot(1) % plot with reference frames
-sys.plot()
+% sys.plot()
 
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 
+sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,2)
