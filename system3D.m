@@ -56,6 +56,9 @@ classdef system3D < handle
             end
             figure()
             plot.drawframe(sys.r,sys.p) % plot GLOBAL RF
+            xlabel('X');
+            ylabel('Y');
+            zlabel('Z');
             
             if sys.nBodies == 0; disp('No bodies in the system.'); return; end;
             

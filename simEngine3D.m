@@ -13,20 +13,20 @@ clear; clc; close all
 
 sys = system3D(); %initialize system
 
-
+p = utility.A2p(utility.R1(45)); % euler parameter for 45 deg rot about X axis
 
 %% DEFINE BODIES IN THE SYSTEM %%
-sys.addBody([1;1;1]) % body 1
-sys.addBody([1;1;0]) % body 2
+sys.addBody([1;1;1],p) % body 1
+sys.addBody([1;1;0],p) % body 2
 
 %% DEFINE POINTS ON THE BODIES %%
-sys.body{1}.addPoint([1;0;0]) % point 1, body 1
+sys.body{1}.addPoint([1;0;0]); % point 1, body 1
 sys.body{1}.addPoint([0;0;0]); % point 2, body 1
-sys.body{2}.addPoint([0;1;0]) % point 1, body 1
+sys.body{2}.addPoint([0;1;0]); % point 1, body 1
 sys.body{2}.addPoint([0;0;0]); % point 2, body 1
 
 %% PLOT THE SYSTEM %%
-% sys.plot(1) % plot with reference frames
+sys.plot(1) % plot with reference frames
 % sys.plot()
 
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%

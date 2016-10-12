@@ -23,7 +23,6 @@ classdef utility
                 e1*e2+e0*e3, e0^2+e2^2-0.5, e2*e3-e0*e1;
                 e1*e3-e0*e2, e2*e3+e0*e1, e0^2+e3^2-0.5];
         end
-        
         function p = A2p(A) % euler parameters p from orientation matrix A 
             % from ME751_f2016 slides 20-25 from lecture 9/21/16
             % input:
@@ -45,6 +44,27 @@ classdef utility
             
             p =[e0;e1;e2;e3];
         end
-        
+        function R1 = R1(theta) % rotation matrix: about X axis by theta degrees
+            theta = theta*pi/180; %convert to radians
+            R1 = [1 0 0; 0 cos(theta) -sin(theta); 0 sin(theta) cos(theta)];
+        end
+        function R2 = R2(theta) % rotation matrix: about Y axis by theta degrees
+            theta = theta*pi/180; %convert to radians
+            R2 = [cos(theta) 0 sin(theta); 0 1 0; -sin(theta) 0 cos(theta)];
+        end
+        function R3 = R3(theta) % rotation matrix: about Z axis by theta degrees
+            theta = theta*pi/180; %convert to radians
+            R3 = [cos(theta) -sin(theta) 0; sin(theta) cos(theta) 0; 0 0 1];
+        end
+        function B = Bmatrix(p,abar) % B matrix, r-p formulation
+            % from ME751_f2016 slide 12 from lecture 9/28/16
+            % input:
+            %   p = [e0;e1;e2;e3] euler parameters
+            %   abar = [3x1], position of point expressed in BODY RF
+            % output:
+            %   B = [3x4] matrix
+            e0 = p(1);
+            e = p(2:4);
+        end
     end
 end

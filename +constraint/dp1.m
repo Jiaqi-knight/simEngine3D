@@ -27,6 +27,7 @@ classdef dp1 < handle
         aBarj;  % vector in body j RF
         phi;    % value of the expression of the constraint PHI^dp1
         nu;     % right-hand side of the velocity equation
+        gamma;  % right-hand side of the acceleration equation, in r-p formulation
     end
     
     methods
@@ -63,10 +64,13 @@ classdef dp1 < handle
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
             Ai = utility.p2A(cons.bodyi.p);
             Aj = utility.p2A(cons.bodyj.p);
-            phi = (Ai*cons.aBari)'*(Aj*cons.aBarj) - cons.ft;
+            phi = (Ai*cons.aBari)'*(Aj*cons.aBarj) - cons.f;
         end
         function nu = get.nu(cons) % right-hand side of the velocity equation
             nu = cons.fdot;
+        end
+        function gamma = get.gamma(cons) % right-hand side of the acceleration equation, in r-p formulation
+            
         end
     end
     
