@@ -24,11 +24,14 @@ classdef system3D < handle
             sys.body = {}; % no bodies defined yet
             sys.cons = {}; % no constraints defined yet
         end
-        function addBody(sys,r,p) % add a body to the system
+        function addBody(sys,r,p,pdot) % add a body to the system
             % inputs:
             %    - sys: system you are adding body to
             %    - r: [3x1] position of body in GLOBAL RF
             %    - p: [4x1] euler parameters of the BODY RF
+            if nargin < 4
+                pdot = [0;0;0;0]; % no velocity change in body orientation
+            end
             if nargin < 3
                 p = [1;0;0;0]; % no change in body orientation from GLOBAL RF
             end
@@ -37,7 +40,7 @@ classdef system3D < handle
             end
             
             ID = sys.nBodies+1; %body ID number
-            sys.body{ID} = body3D(ID,r,p); % new instance of the body class
+            sys.body{ID} = body3D(ID,r,p,pdot); % new instance of the body class
         end
         function addConstraint(sys,constraintName,varargin) % add constraint to the system            
             ID = sys.nConstraints+1; %constraint ID number

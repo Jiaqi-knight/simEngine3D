@@ -56,6 +56,20 @@ classdef utility
             theta = theta*pi/180; %convert to radians
             R3 = [cos(theta) -sin(theta) 0; sin(theta) cos(theta) 0; 0 0 1];
         end
+        function a_tilde = tilde(a) % returns algebraic vector outer product matrix (cross product)
+            % input:
+            %   a = [a1;a2;a3] 
+            % output:
+            %   a_tilde = [3x3], matrix form of a for doig outer product
+            % example:
+            %   a = [3x1], b = [3x1]. What is outer product a x b? This is
+            %   the term an algebraic vector uses for "cross product".
+            %   Outer product = a_tilde*b
+            a_tilde = [   0  -a(3)   a(2);
+                        a(3)    0   -a(1);
+                       -a(2)  a(1)     0 ;];
+            
+        end
         function B = Bmatrix(p,abar) % B matrix, r-p formulation
             % from ME751_f2016 slide 12 from lecture 9/28/16
             % input:
@@ -65,6 +79,9 @@ classdef utility
             %   B = [3x4] matrix
             e0 = p(1);
             e = p(2:4);
+            
+            B = 2*[(e0*eye(3) + utility.tilde(e))*abar, e*abar'-(e0*eye(3)+utility.tilde(e))*utility.tilde(abar)];
+            
         end
     end
 end
