@@ -30,12 +30,13 @@ classdef system3D < handle
         end
         function addConstraint(sys,constraintName,varargin) % add constraint to the system            
             ID = sys.nConstraints+1; %constraint ID number
-            if strcmp(constraintName,'dp1')
-                sys.cons{ID} = constraint.dp1(varargin{:}); % new instance of dp1 class
-            elseif strcmp(constraintName,'cd')
-                 error('CD not implemented yet.');
-            else
-                error('Constraint not implemented yet.');
+            switch  constraintName
+                case 'dp1'
+                    sys.cons{ID} = constraint.dp1(varargin{:}); % new instance of dp1 class
+                case 'cd'
+                    error('CD not implemented yet.');
+                otherwise
+                    error('Constraint not implemented yet.');
             end
         end
         function plot(sys,varargin) % plots the bodies in the system

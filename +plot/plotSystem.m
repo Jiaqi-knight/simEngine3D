@@ -51,7 +51,7 @@ for i = 1:sys.nBodies % plot bodies in system
     % IF POINTS ON BODY, PLOT THEM
     if sys.body{i}.nPoints ~= 0
         for j = 1:sys.body{i}.nPoints % plot bodies in system
-            sbar = [sys.body{i}.point{j}(1);sys.body{i}.point{j}(2);sys.body{i}.point{j}(3)]; % local position of point
+            sbar = sys.body{i}.point{j}; % local position of point
             Asbar = utility.p2A(sys.body{i}.p)*sbar; % rotated to global rf
             rAsbar = r + Asbar; % global position of point
             

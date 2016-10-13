@@ -36,3 +36,4 @@ sys.plot(1) % plot with reference frames
 
 sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,2)
 sys.addConstraint('dp1',sys.body{2},1,2,sys.body{3},1,2)
+% sys.addConstraint('cd',sys.body{2},1,sys.body{3},2)

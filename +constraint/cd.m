@@ -1,27 +1,25 @@
-classdef dp1 < handle
-    % Filename: dp1.m
+classdef cd < handle
+    % Filename: cd.m
     % Author:   Samuel Acuña
-    % Date:     10 Oct 2016
+    % Date:     13 Oct 2016
     % About:
-    % This class handles instances of DP1 constraints. It Uses the r-p
+    % This class handles instances of CD constraints. It Uses the r-p
     % formulation (euler parameters). Removes 1 degree of Freedom.
-    % DP1 constraint: the dot product between vector aBari and aBarj assume
-    % a specified value f. f is often 0, meaning aBari and aBarj are
-    % orthogonal vectors
+    % CD constraint: the difference between the x (or y or z) coordinate of
+    % point P on body i and the x (or y or z) coordinate of point Q on body
+    % j assume a specified value f.
     properties
+        cName;  % coordinate of interest {'x','y','z'}
         bodyi;  % body i
         bodyj;  % body j
-        Pi;     % ID number for point P on body i, tail of aBari vector, body i RF
-        Qi;     % ID number for point Q on body i, head of aBari vector, body i RF
-        Pj;     % ID number for point P on body j, tail of aBarj vector, body j RF
-        Qj;     % ID number for point Q on body j, head of aBarj vector, body j RF
+        Pi;     % ID number for point P on body i
+        Qj;     % ID number for point Q on body j
         f;      % prescribed constraint, often 0, but can be a function of t
         fdot;   % derivative of f
         fddot;  % derivative of fdot
     end
     properties (Dependent)
-        aBari;  % vector in body i RF
-        aBarj;  % vector in body j RF
+        coord;  % unit vector of the coordinate of interest [3x1]
         phi;    % value of the expression of the constraint PHI^dp1
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
@@ -31,7 +29,7 @@ classdef dp1 < handle
     
     methods
         %constructor function
-        function cons = dp1(bodyi,PiID,QiID,bodyj,PjID,QjID,f,fdot,fddot) %constructor function
+        function cons = dp1(cName,bodyi,PiID,bodyj,QjID,f,fdot,fddot) %constructor function
             if ~exist('f','var') || isempty(f)
                 f = 0; % prescribed constraint is 0, indicating vectors are orthogonal
             end
@@ -42,28 +40,39 @@ classdef dp1 < handle
                 fddot = 0; % derivative of fdt
             end
             
+            cons.cName = cName;
             cons.bodyi = bodyi;
             cons.Pi = PiID;
-            cons.Qi = QiID;
             cons.bodyj = bodyj;
-            cons.Pj = PjID;
             cons.Qj = QjID;
             cons.f = f;
             cons.fdot = fdot;
             cons.fddot = fddot;
         end
-        function aBari = get.aBari(cons) % vector in body i RF
-            % aBari = Qi - Pi
-            aBari = cons.bodyi.point{cons.Qi} - cons.bodyi.point{cons.Pi};
-        end
-        function aBarj = get.aBarj(cons) % vector in body j RF
-            % aBarj = Qj - Pj
-            aBarj = cons.bodyj.point{cons.Qj} - cons.bodyj.point{cons.Pj};
+        function coord = get.coord(cons) % define unit vector of the coordinate of interest 
+            switch cons.cName
+                case 'x'
+                    coord = [1;0;0];
+                case 'y'
+                    coord = [0;1;0];
+                case 'z'
+                    coord = [0;0;1];
+                otherwise
+                    error('coordinate not defined in CD constraint')
+            end
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
             % phi : [1x1]
-            phi = (cons.bodyi.A*cons.aBari)'*(cons.bodyj.A*cons.aBarj) - cons.f;
+            phi = cons.coord'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)-f;
         end
+        
+        
+        
+        
+        
+        % DONE WITH ABOVE, FINISH BELOW...
+        
+        
         function nu = get.nu(cons) % right-hand side of the velocity equation
             % nu : [1x1]
             nu = cons.fdot;

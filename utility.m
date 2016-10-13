@@ -83,5 +83,8 @@ classdef utility
             B = 2*[(e0*eye(3) + utility.tilde(e))*abar, e*abar'-(e0*eye(3)+utility.tilde(e))*utility.tilde(abar)];
             
         end
+        function dij = dij(bodyi,Pi,bodyj,Qj) % vector between points Pi and Qj
+            dij = bodyj.r+bodyj.A*bodyj.point{Qj} - bodyi.r+bodyi.A*bodyi.point{Pi};
+        end
     end
 end
