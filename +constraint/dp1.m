@@ -9,7 +9,7 @@ classdef dp1 < handle
     % Outputs (any or all):
     %   X the value of the expression of the constraint "PHI_dp1"
     %   X the right-hand side of the velocity equation "nu"
-    %   - the right-hand side of the acceleration equation "gamma"
+    %   X the right-hand side of the acceleration equation "gamma"
     %   - the expression of the partial derivatives "PHI_r" and "PHI_p"
     properties
         bodyi;  % body i
@@ -27,19 +27,21 @@ classdef dp1 < handle
         aBarj;  % vector in body j RF
         phi;    % value of the expression of the constraint PHI^dp1
         nu;     % right-hand side of the velocity equation
-        gamma;  % right-hand side of the acceleration equation, in r-p formulation
+        gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
+        phi_r;  % partial derivative of constraint with respect to r
+        phi_p;  % partial derivative of constraint with respect to p
     end
     
     methods
         %constructor function
         function cons = dp1(bodyi,PiID,QiID,bodyj,PjID,QjID,f,fdot,fddot) %constructor function
-            if nargin <= 6
+            if ~exist('f','var') || isempty(f)
                 f = 0; % prescribed constraint is 0, indicating vectors are orthogonal
             end
-            if nargin <= 7
+            if ~exist('fdot','var') || isempty(fdot)
                 fdot = 0; % derivative of ft
             end
-            if nargin <=8
+            if ~exist('fddot','var') || isempty(fddot)
                 fddot = 0; % derivative of fdt
             end
             
@@ -62,14 +64,59 @@ classdef dp1 < handle
             aBarj = cons.bodyj.point{cons.Qj} - cons.bodyj.point{cons.Pj};
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+            % phi : [1x1]
             phi = (cons.bodyi.A*cons.aBari)'*(cons.bodyj.A*cons.aBarj) - cons.f;
         end
         function nu = get.nu(cons) % right-hand side of the velocity equation
+            % nu : [1x1]
             nu = cons.fdot;
         end
-        function gamma = get.gamma(cons) % right-hand side of the acceleration equation, in r-p formulation
+        function gammaHat = get.gammaHat(cons) % right-hand side of the acceleration equation, in r-p formulation
             % from ME751_f2016 slide 8 from lecture 10/7/16
-            gamma = -(cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyj.pdot,cons.aBarj)*cons.bodyj.pdot - WORK ON THIS NOW!!!!
+            % gammaHat : [1x1]
+            gammaHat = -(cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyj.pdot,cons.aBarj)*cons.bodyj.pdot + ...
+                       -(cons.bodyj.A*cons.aBarj)'*utility.Bmatrix(cons.bodyi.pdot,cons.aBari)*cons.bodyi.pdot + ...
+                       -2*(utility.Bmatrix(cons.bodyi.p,cons.aBari)*cons.bodyi.pdot)'*(utility.Bmatrix(cons.bodyj.p,cons.aBarj)*cons.bodyj.pdot)+cons.fddot;
+        end
+        function phi_r = get.phi_r(cons) 
+            % from ME751_f2016 slide 13 from lecture 9/28/16
+            % One body can be the ground. In this case, the number of columns
+            % in the Jacobian is half ? there are no partial derivatives with 
+            % respect to r or p. Thus, we must properly dimension the size of
+            % the vectors/matrices because the grounded body does not have 
+            % any generalized coordinates.
+            % phi_r : [1x6] normally, unless grounded, then [1x3]
+            
+            phi_ri = zeros(1,3);
+            phi_rj = zeros(1,3);
+            
+            if cons.bodyi.isGround
+                phi_r = [phi_rj];
+            elseif cons.bodyj.isGround
+                phi_r = [phi_ri];
+            else 
+                phi_r = [phi_ri, phi_rj]; 
+            end
+        end
+        function phi_p = get.phi_p(cons)
+            % from ME751_f2016 slide 13 from lecture 9/28/16
+            % One body can be the ground. In this case, the number of columns
+            % in the Jacobian is half ? there are no partial derivatives with 
+            % respect to r or p. Thus, we must properly dimension the size of
+            % the vectors/matrices because the grounded body does not have 
+            % any generalized coordinates.
+            % phi_p : [1x8] normally, unless grounded, then [1x4]
+            
+            phi_pi = (cons.bodyj.A*cons.aBarj)'*(utility.Bmatrix(cons.bodyi.p,cons.aBari));
+            phi_pj = (cons.bodyi.A*cons.aBari)'*(utility.Bmatrix(cons.bodyj.p,cons.aBarj));
+            
+            if cons.bodyi.isGround
+                phi_p = [phi_pj];
+            elseif cons.bodyj.isGround
+                phi_p = [phi_pi];
+            else 
+                phi_p = [phi_pi, phi_pj]; 
+            end
         end
     end
     
