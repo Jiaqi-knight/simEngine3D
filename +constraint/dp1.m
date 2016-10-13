@@ -1,16 +1,16 @@
 classdef dp1 < handle
     % Filename: dp1.m
-% Author:   Samuel Acuña
-% Date:     10 Oct 2016
-% About:    
-% This class handles instances of DP1 constraints. It Uses the r-p 
-% formulation (euler parameters). Removes 1 degree of Freedom.
-
-% Outputs (any or all):
-%   X the value of the expression of the constraint "PHI_dp1"
-%   X the right-hand side of the velocity equation "nu"
-%   - the right-hand side of the acceleration equation "gamma"
-%   - the expression of the partial derivatives "PHI_r" and "PHI_p"
+    % Author:   Samuel Acuña
+    % Date:     10 Oct 2016
+    % About:
+    % This class handles instances of DP1 constraints. It Uses the r-p
+    % formulation (euler parameters). Removes 1 degree of Freedom.
+    
+    % Outputs (any or all):
+    %   X the value of the expression of the constraint "PHI_dp1"
+    %   X the right-hand side of the velocity equation "nu"
+    %   - the right-hand side of the acceleration equation "gamma"
+    %   - the expression of the partial derivatives "PHI_r" and "PHI_p"
     properties
         bodyi;  % body i
         bodyj;  % body j
@@ -62,15 +62,14 @@ classdef dp1 < handle
             aBarj = cons.bodyj.point{cons.Qj} - cons.bodyj.point{cons.Pj};
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
-            Ai = utility.p2A(cons.bodyi.p);
-            Aj = utility.p2A(cons.bodyj.p);
-            phi = (Ai*cons.aBari)'*(Aj*cons.aBarj) - cons.f;
+            phi = (cons.bodyi.A*cons.aBari)'*(cons.bodyj.A*cons.aBarj) - cons.f;
         end
         function nu = get.nu(cons) % right-hand side of the velocity equation
             nu = cons.fdot;
         end
         function gamma = get.gamma(cons) % right-hand side of the acceleration equation, in r-p formulation
-            
+            % from ME751_f2016 slide 8 from lecture 10/7/16
+            gamma = -(cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyj.pdot,cons.aBarj)*cons.bodyj.pdot - WORK ON THIS NOW!!!!
         end
     end
     
