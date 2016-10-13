@@ -18,12 +18,15 @@ p = utility.A2p(utility.R1(45)); % euler parameter for 45 deg rot about X axis
 %% DEFINE BODIES IN THE SYSTEM %%
 sys.addBody([1;1;1],p) % body 1
 sys.addBody([1;1;0],p) % body 2
+sys.addBody([0;1;0],p,[],[],[],1) % body 3, ground
 
 %% DEFINE POINTS ON THE BODIES %%
-sys.body{1}.addPoint([1;0;0]); % point 1, body 1
-sys.body{1}.addPoint([0;0;0]); % point 2, body 1
-sys.body{2}.addPoint([0;1;0]); % point 1, body 1
-sys.body{2}.addPoint([0;0;0]); % point 2, body 1
+sys.body{1}.addPoint([1;0;0]); % body 1, point 1
+sys.body{1}.addPoint([0;0;0]); % body 1, point 2
+sys.body{2}.addPoint([0;1;0]); % body 2, point 1
+sys.body{2}.addPoint([0;0;0]); % body 2, point 2
+sys.body{3}.addPoint([0;0;0]); % body 3, point 1
+sys.body{3}.addPoint([0;0;1]); % body 3, point 2
 
 %% PLOT THE SYSTEM %%
 sys.plot(1) % plot with reference frames
@@ -32,3 +35,4 @@ sys.plot(1) % plot with reference frames
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 
 sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,2)
+sys.addConstraint('dp1',sys.body{2},1,2,sys.body{3},1,2)
