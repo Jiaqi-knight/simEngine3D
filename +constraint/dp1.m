@@ -61,10 +61,12 @@ classdef dp1 < handle
             aBarj = cons.bodyj.point{cons.Qj} - cons.bodyj.point{cons.Pj};
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+            % from ME751_f2016 slide 11 from lecture 09/26/16
             % phi : [1x1]
             phi = (cons.bodyi.A*cons.aBari)'*(cons.bodyj.A*cons.aBarj) - cons.f;
         end
         function nu = get.nu(cons) % right-hand side of the velocity equation
+            % from ME751_f2016 slide 12 from lecture 09/26/16
             % nu : [1x1]
             nu = cons.fdot;
         end

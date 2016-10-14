@@ -36,4 +36,8 @@ sys.plot(1) % plot with reference frames
 
 sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,2)
 sys.addConstraint('dp1',sys.body{2},1,2,sys.body{3},1,2)
-% sys.addConstraint('cd',sys.body{2},1,sys.body{3},2)
+sys.addConstraint('cd','x',sys.body{2},1,sys.body{1},2)
+
+sys.cons{1} % dp1, 2 bodies
+sys.cons{2} % dp1, body with ground
+sys.cons{3} % cd 2 bodies

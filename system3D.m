@@ -34,7 +34,7 @@ classdef system3D < handle
                 case 'dp1'
                     sys.cons{ID} = constraint.dp1(varargin{:}); % new instance of dp1 class
                 case 'cd'
-                    error('CD not implemented yet.');
+                    sys.cons{ID} = constraint.cd(varargin{:}); % new instance of dp1 class
                 otherwise
                     error('Constraint not implemented yet.');
             end
