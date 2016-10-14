@@ -7,21 +7,22 @@ classdef body3D < handle
     % body, as well as local points on the body.This also
     % estabilishes the local reference frame.
     properties
-        ID;   % body ID number
-        r; % = [x;y;z] location of body RF from GLOBAL RF
-        p; % = [e0;e1;e2;e3] euler parameters of BODY RF
-        pdot; % = [4x1] time derivative of euler parameters p
-        m; % mass of the part
-        J; % inertia tensor of the part
+        ID;       % body ID number
+        r;        % = [x;y;z] location of body RF from GLOBAL RF        
+        p;        % = [e0;e1;e2;e3] euler parameters of BODY RF
+        rdot;     % = [3x1] time derivative of position r
+        pdot;     % = [4x1] time derivative of euler parameters p
+        m;        % mass of the part
+        J;        % inertia tensor of the part
         isGround; % if body is ground
-        point; % structure of points on the body, defined in BODY RF
+        point;    % structure of points on the body, defined in BODY RF
     end
     properties (Dependent)
         nPoints; % number of points on the body
         A; % rotation matrix, an expression of the euler parameters
     end
     methods (Access = public)
-        function body = body3D(ID,r,p,pdot,m,J,isGround) %constructor function
+        function body = body3D(ID,r,p,rdot,pdot,m,J,isGround) %constructor function
             if ~exist('isGround','var') || isempty(isGround)
                 isGround = 0; % body is not ground
             end
@@ -34,6 +35,9 @@ classdef body3D < handle
             if ~exist('pdot','var') || isempty(pdot) || isGround == 1
                 pdot = [0;0;0;0]; % no velocity change in body orientation
             end
+            if ~exist('rdot','var') || isempty(rdot) || isGround == 1
+                rdot = [0;0;0]; % no velocity change in body position
+            end
             if ~exist('p','var') || isempty(p)
                 p = [1;0;0;0]; % no change in body orientation from GLOBAL RF
             end
@@ -45,6 +49,7 @@ classdef body3D < handle
             body.ID = ID;
             body.r = r;
             body.p = p;
+            body.rdot = rdot;
             body.pdot = pdot;
             body.m = m;
             body.J = J;

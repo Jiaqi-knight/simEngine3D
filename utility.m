@@ -86,5 +86,10 @@ classdef utility
         function dij = dij(bodyi,Pi,bodyj,Qj) % vector between points Pi and Qj
             dij = bodyj.r+bodyj.A*bodyj.point{Qj} - bodyi.r+bodyi.A*bodyi.point{Pi};
         end
+        function dijdot = dijdot(bodyi,Pi,bodyj,Qj) % time derivative of dij
+            % from ME751_f2016 slide 7 from lecture 10/7/16
+            dijdot = bodyj.rdot +  utility.Bmatrix(bodyj.p,bodyj.point{Qj})*bodyj.pdot + ...
+                    -bodyi.rdot + -utility.Bmatrix(bodyi.p,bodyi.point{Pi})*bodyi.pdot;
+        end
     end
 end

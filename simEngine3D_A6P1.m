@@ -1,9 +1,9 @@
 
-% Filename: simEngine3D.m
+% Filename: simEngine3D_A6P1.m
 % Author:   Samuel Acuña
-% Date:     11 Oct 2016
+% Date:     14 Oct 2016
 % About:    
-% Driver file for the simEngine3D framework, for hw5. Defines the system, the
+% Driver file for the simEngine3D framework, for hw6 . Defines the system, the
 % bodies in the system, and the constraints in the system.
 
 clear; clc; close all
@@ -33,10 +33,14 @@ sys.plot(1) % plot with reference frames
 
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 
-sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,2)
-sys.addConstraint('dp1',sys.body{2},1,2,sys.body{3},1,2)
-sys.addConstraint('cd','x',sys.body{2},1,sys.body{1},2)
-
-sys.cons{1} % dp1, 2 bodies
-sys.cons{2} % dp1, body with ground
-sys.cons{3} % cd 2 bodies
+sys.addConstraint('d',sys.body{2},2,sys.body{3},1,1)
+d = utility.dij(sys.body{1},2,sys.body{3},2)
+sys.addConstraint('d',sys.body{1},2,sys.body{3},2,norm(d)) SOMETHING IS going WRONG HERE
+% 
+% sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,2)
+% sys.addConstraint('dp1',sys.body{2},1,2,sys.body{3},1,2)
+% sys.addConstraint('cd','x',sys.body{2},1,sys.body{1},2)
+% 
+% sys.cons{1} % dp1, 2 bodies
+% sys.cons{2} % dp1, body with ground
+% sys.cons{3} % cd 2 bodies

@@ -32,9 +32,11 @@ classdef system3D < handle
             ID = sys.nConstraints+1; %constraint ID number
             switch  constraintName
                 case 'dp1'
-                    sys.cons{ID} = constraint.dp1(varargin{:}); % new instance of dp1 class
+                    sys.cons{ID} = constraint.dp1(varargin{:}); % new instance of constraint.dp1 class
                 case 'cd'
-                    sys.cons{ID} = constraint.cd(varargin{:}); % new instance of dp1 class
+                    sys.cons{ID} = constraint.cd(varargin{:}); % new instance of constraint.cd class
+                case 'd'
+                    sys.cons{ID} = constraint.d(varargin{:}); % new instance of constraint.d class
                 otherwise
                     error('Constraint not implemented yet.');
             end
