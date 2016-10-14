@@ -19,7 +19,7 @@ classdef cd < handle
         fddot;  % derivative of fdot
     end
     properties (Dependent)
-        coord;  % unit vector of the coordinate of interest [3x1]
+        c;      % unit vector of the coordinate of interest [3x1]
         phi;    % value of the expression of the constraint PHI^dp1
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
@@ -29,7 +29,7 @@ classdef cd < handle
     
     methods
         %constructor function
-        function cons = dp1(cName,bodyi,PiID,bodyj,QjID,f,fdot,fddot) %constructor function
+        function cons = cd(cName,bodyi,PiID,bodyj,QjID,f,fdot,fddot) %constructor function
             if ~exist('f','var') || isempty(f)
                 f = 0; % prescribed constraint is 0, indicating vectors are orthogonal
             end
@@ -49,43 +49,36 @@ classdef cd < handle
             cons.fdot = fdot;
             cons.fddot = fddot;
         end
-        function coord = get.coord(cons) % define unit vector of the coordinate of interest 
+        function c = get.c(cons) % define unit vector of the coordinate of interest 
             switch cons.cName
                 case 'x'
-                    coord = [1;0;0];
+                    c = [1;0;0];
                 case 'y'
-                    coord = [0;1;0];
+                    c = [0;1;0];
                 case 'z'
-                    coord = [0;0;1];
+                    c = [0;0;1];
                 otherwise
                     error('coordinate not defined in CD constraint')
             end
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+            % from ME751_f2016 slide 20 from lecture 09/26/16
             % phi : [1x1]
-            phi = cons.coord'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)-f;
+            phi = cons.c'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)-cons.f;
         end
-        
-        
-        
-        
-        
-        % DONE WITH ABOVE, FINISH BELOW...
-        
-        
         function nu = get.nu(cons) % right-hand side of the velocity equation
+            % from ME751_f2016 slide 20 from lecture 09/26/16
             % nu : [1x1]
             nu = cons.fdot;
         end
         function gammaHat = get.gammaHat(cons) % right-hand side of the acceleration equation, in r-p formulation
             % from ME751_f2016 slide 8 from lecture 10/7/16
             % gammaHat : [1x1]
-            gammaHat = -(cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyj.pdot,cons.aBarj)*cons.bodyj.pdot + ...
-                       -(cons.bodyj.A*cons.aBarj)'*utility.Bmatrix(cons.bodyi.pdot,cons.aBari)*cons.bodyi.pdot + ...
-                       -2*(utility.Bmatrix(cons.bodyi.p,cons.aBari)*cons.bodyi.pdot)'*(utility.Bmatrix(cons.bodyj.p,cons.aBarj)*cons.bodyj.pdot)+cons.fddot;
+            gammaHat =  cons.c'*utility.Bmatrix(cons.bodyi.pdot,cons.bodyi.point{cons.Pi})*cons.bodyi.pdot + ...
+                       -cons.c'*utility.Bmatrix(cons.bodyj.pdot,cons.bodyj.point{cons.Qj})*cons.bodyj.pdot + cons.fddot;
         end
         function phi_r = get.phi_r(cons) 
-            % from ME751_f2016 slide 13 from lecture 9/28/16
+            % from ME751_f2016 slide 17 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
             % in the Jacobian is half ? there are no partial derivatives with 
             % respect to r or p. Thus, we must properly dimension the size of
@@ -93,8 +86,8 @@ classdef cd < handle
             % any generalized coordinates.
             % phi_r : [1x6] normally, unless grounded, then [1x3]
             
-            phi_ri = zeros(1,3);
-            phi_rj = zeros(1,3);
+            phi_ri = -cons.c';
+            phi_rj = cons.c';
             
             if cons.bodyi.isGround
                 phi_r = [phi_rj];
@@ -105,7 +98,7 @@ classdef cd < handle
             end
         end
         function phi_p = get.phi_p(cons)
-            % from ME751_f2016 slide 13 from lecture 9/28/16
+            % from ME751_f2016 slide 17 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
             % in the Jacobian is half ? there are no partial derivatives with 
             % respect to r or p. Thus, we must properly dimension the size of
@@ -113,8 +106,8 @@ classdef cd < handle
             % any generalized coordinates.
             % phi_p : [1x8] normally, unless grounded, then [1x4]
             
-            phi_pi = (cons.bodyj.A*cons.aBarj)'*(utility.Bmatrix(cons.bodyi.p,cons.aBari));
-            phi_pj = (cons.bodyi.A*cons.aBari)'*(utility.Bmatrix(cons.bodyj.p,cons.aBarj));
+            phi_pi = -cons.c'*utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi});
+            phi_pj =  cons.c'*utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
             
             if cons.bodyi.isGround
                 phi_p = [phi_pj];
