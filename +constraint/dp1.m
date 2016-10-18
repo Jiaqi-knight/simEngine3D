@@ -51,6 +51,10 @@ classdef dp1 < handle
             cons.f = f;
             cons.fdot = fdot;
             cons.fddot = fddot;
+               
+            if cons.phi ~= 0
+                warning('Initial conditions for ''dp1'' are not consistent. But solution will converge so constraints are satisfied.')
+            end
         end
         function aBari = get.aBari(cons) % vector in body i RF
             % aBari = Qi - Pi
@@ -80,7 +84,7 @@ classdef dp1 < handle
         function phi_r = get.phi_r(cons) 
             % from ME751_f2016 slide 13 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
-            % in the Jacobian is half ? there are no partial derivatives with 
+            % in the Jacobian is half. there are no partial derivatives with 
             % respect to r or p. Thus, we must properly dimension the size of
             % the vectors/matrices because the grounded body does not have 
             % any generalized coordinates.
@@ -100,7 +104,7 @@ classdef dp1 < handle
         function phi_p = get.phi_p(cons)
             % from ME751_f2016 slide 13 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
-            % in the Jacobian is half ? there are no partial derivatives with 
+            % in the Jacobian is half. there are no partial derivatives with 
             % respect to r or p. Thus, we must properly dimension the size of
             % the vectors/matrices because the grounded body does not have 
             % any generalized coordinates.

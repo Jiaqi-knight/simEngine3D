@@ -12,9 +12,8 @@ clear; clc; close all
 
 sys = system3D(); %initialize system
 
-p = utility.A2p(utility.R1(45)); % euler parameter for 45 deg rot about X axis
-
 %% DEFINE BODIES IN THE SYSTEM %%
+p = utility.A2p(utility.R1(45)); % euler parameter for 45 deg rot about X axis
 sys.addBody([1;1;1],p) % body 1
 sys.addBody([1;1;0],p) % body 2
 sys.addBody([0;1;0],p,[],[],[],[],1) % body 3, ground
@@ -27,20 +26,24 @@ sys.body{2}.addPoint([0;0;0]); % body 2, point 2
 sys.body{3}.addPoint([0;0;0]); % body 3, point 1
 sys.body{3}.addPoint([0;0;1]); % body 3, point 2
 
-%% PLOT THE SYSTEM %%
+%% PLOT THE SYSTEM in 3D %%
 sys.plot(1) % plot with reference frames
 % sys.plot()
 
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 
-sys.addConstraint('d',sys.body{2},2,sys.body{3},1,1)
-d = utility.dij(sys.body{1},2,sys.body{3},2)
-sys.addConstraint('d',sys.body{1},2,sys.body{3},2,norm(d)) SOMETHING IS going WRONG HERE
-% 
-% sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,2)
-% sys.addConstraint('dp1',sys.body{2},1,2,sys.body{3},1,2)
-% sys.addConstraint('cd','x',sys.body{2},1,sys.body{1},2)
-% 
-% sys.cons{1} % dp1, 2 bodies
-% sys.cons{2} % dp1, body with ground
-% sys.cons{3} % cd 2 bodies
+sys.addConstraint('d',sys.body{2},2,sys.body{1},2,1)
+
+PiQj = utility.dij(sys.body{1},2,sys.body{3},2);
+C = norm(PiQj) % distance between points Pi and Qj
+sys.addConstraint('d',sys.body{1},2,sys.body{3},2,C)
+
+sys.addConstraint('dp2',sys.body{1},2,1,2,sys.body{2},2)
+sys.addConstraint('dp2',sys.body{2},2,1,2,sys.body{3},1)
+
+
+% DISPLAY CONSTRAINT PROPERTIES
+sys.cons{1} % d, 2 bodies
+sys.cons{2} % d, body with ground
+sys.cons{3} % dp2, 2 bodies
+sys.cons{4} % dp2, body with ground

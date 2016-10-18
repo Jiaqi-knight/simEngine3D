@@ -1,27 +1,27 @@
-classdef d < handle
-    % Filename: d.m
+classdef dp2 < handle
+    % Filename: dp2.m
     % Author:   Samuel Acuña
-    % Date:     14 Oct 2016
+    % Date:     17 Oct 2016
     % About:
-    % This class handles instances of D constraints. It Uses the r-p
+    % This class handles instances of DP2 constraints. It Uses the r-p
     % formulation (euler parameters). Removes 1 degree of Freedom.
-    % D constraint: the distance between point P on body i and point Q on
-    % body j assume a specified value f, f > 0. 
-    %
-    % Note: I'm using the constraint formulation from Haug eq 9.4.8, not
-    % the way it was presented in class (ME751_f2016 slide 17 from lecture
-    % 09/26/16)
+    % DP2 constraint: the dot product between vector aBari and a vector
+    % PiQj from body i to body j assume a specified value f. f is often 0,
+    % meaning aBari and PiQj are orthogonal vectors.
     properties
         bodyi;  % body i
         bodyj;  % body j
-        Pi;     % ID number for point P on body i
-        Qj;     % ID number for point Q on body j
-        f;      % prescribed distance constraint, > 0, and can be a function of t.
+        aBari_tail; % ID number for point aBari_tail on body i, tail of aBari vector
+        aBari_head; % ID number for point aBari_head on body i, head of aBari vector
+        Pi;     % ID number for point P on body i, tail of PiQj vector
+        Qj;     % ID number for point Q on body j, head of PiQj vector
+        f;      % prescribed constraint, often 0, but can be a function of t
         fdot;   % derivative of f
         fddot;  % derivative of fdot
     end
     properties (Dependent)
-        PiQj;   % vector in GLOBAL RF form point P on body i to point Q on body j
+        aBari;  % vector in body i RF
+        PiQj;   % vector in GLOBAL RF
         phi;    % value of the expression of the constraint PHI^dp1
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
@@ -31,12 +31,9 @@ classdef d < handle
     
     methods
         %constructor function
-        function cons = d(bodyi,PiID,bodyj,QjID,f,fdot,fddot) %constructor function
-            if exist('f','var') && (f <=0)
-                error('D constraint cannot have a prescribed distance <= 0');
-            end
+        function cons = dp2(bodyi,aBari_tailID,aBari_headID,PiID,bodyj,QjID,f,fdot,fddot) %constructor function
             if ~exist('f','var') || isempty(f)
-                f = 1; % prescribed constraint is 1
+                f = 0; % prescribed constraint is 0, indicating vectors are orthogonal
             end
             if ~exist('fdot','var') || isempty(fdot)
                 fdot = 0; % derivative of ft
@@ -46,6 +43,8 @@ classdef d < handle
             end
             
             cons.bodyi = bodyi;
+            cons.aBari_tail = aBari_tailID;
+            cons.aBari_head = aBari_headID;
             cons.Pi = PiID;
             cons.bodyj = bodyj;
             cons.Qj = QjID;
@@ -54,34 +53,37 @@ classdef d < handle
             cons.fddot = fddot;
             
             if cons.phi ~= 0
-                warning('Initial conditions for ''d'' are not consistent. But solution will converge so constraints are satisfied.')
+                warning('Initial conditions for ''dp2'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end
-        function PiQj = get.PiQj(cons) % vector in GLOBAL RF of the constrained distance
+        function aBari = get.aBari(cons) % vector in body i RF
+            % aBari = aBari_head - aBari_tail
+            aBari = cons.bodyi.point{cons.aBari_head} - cons.bodyi.point{cons.aBari_tail};
+        end
+        function PiQj = get.PiQj(cons) % vector in GLOBAL RF
             % PiQj = vector from Pi to Qj
             PiQj = utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
-            % from Haug 9.4.8
+            % from ME751_f2016 slide 14 from lecture 09/26/16
             % phi : [1x1]
-            phi = utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)-(cons.f)^2;
+            phi = (cons.bodyi.A*cons.aBari)'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) - cons.f;
         end
         function nu = get.nu(cons) % right-hand side of the velocity equation
-            % time derivative of f^2
+            % from ME751_f2016 slide 12 from lecture 09/26/16
             % nu : [1x1]
-            nu = 2*cons.f*cons.fdot;
+            nu = cons.fdot;
         end
         function gammaHat = get.gammaHat(cons) % right-hand side of the acceleration equation, in r-p formulation
-            % from ME751_f2016 slide 8 from lecture 10/7/16, 
-            % also, second time derivative of f^2
+            % from ME751_f2016 slide 8 from lecture 10/7/16
             % gammaHat : [1x1]
-            gammaHat = -2*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)'*utility.Bmatrix(cons.bodyj.pdot,cons.bodyj.point{cons.Qj})*cons.bodyj.pdot + ...
-                        2*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)'*utility.Bmatrix(cons.bodyi.pdot,cons.bodyi.point{cons.Pi})*cons.bodyi.pdot + ...
-                       -2*utility.dijdot(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)'*utility.dijdot(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) + ...
-                        2*cons.fdot*cons.fdot + 2*cons.f*cons.fddot;
+            gammaHat = -(cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyj.pdot,cons.bodyj.point{cons.Qj})*cons.bodyj.pdot + ...
+                        (cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyi.pdot,cons.bodyi.point{cons.Pi})*cons.bodyi.pdot + ...
+                       -(utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj))'*utility.Bmatrix(cons.bodyi.pdot,cons.aBari)*cons.bodyi.pdot + ...
+                       -2*(utility.Bmatrix(cons.bodyi.p,cons.aBari)*cons.bodyi.pdot)'*utility.dijdot(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) + cons.fddot;
         end
         function phi_r = get.phi_r(cons) 
-            % from ME751_f2016 slide 16 from lecture 9/28/16
+            % from ME751_f2016 slide 15 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
             % in the Jacobian is half. there are no partial derivatives with 
             % respect to r or p. Thus, we must properly dimension the size of
@@ -89,8 +91,8 @@ classdef d < handle
             % any generalized coordinates.
             % phi_r : [1x6] normally, unless grounded, then [1x3]
             
-            phi_ri = -2*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)';
-            phi_rj =  2*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)';
+            phi_ri = -(cons.bodyi.A*cons.aBari)';
+            phi_rj =  (cons.bodyi.A*cons.aBari)';
             
             if cons.bodyi.isGround
                 phi_r = [phi_rj];
@@ -101,7 +103,7 @@ classdef d < handle
             end
         end
         function phi_p = get.phi_p(cons)
-            % from ME751_f2016 slide 17 from lecture 9/28/16
+            % from ME751_f2016 slide 13 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
             % in the Jacobian is half. there are no partial derivatives with 
             % respect to r or p. Thus, we must properly dimension the size of
@@ -109,8 +111,9 @@ classdef d < handle
             % any generalized coordinates.
             % phi_p : [1x8] normally, unless grounded, then [1x4]
             
-            phi_pi = -2*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)'*utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi});
-            phi_pj =  2*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)'*utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            phi_pi = (utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj))'*utility.Bmatrix(cons.bodyi.p,cons.aBari) + ...
+                    -(cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi});
+            phi_pj = (cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
             
             if cons.bodyi.isGround
                 phi_p = [phi_pj];

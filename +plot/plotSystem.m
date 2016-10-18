@@ -45,8 +45,8 @@ for i = 1:sys.nBodies % plot bodies in system
     end
     
     % add body labels
-    r_text = r + 0.05; %adjust so label is not right over body origin
-    text(r_text(1),r_text(2),r_text(3),num2str(sys.body{i}.ID));
+    r_text = r + 0.1; %adjust so label is not right over body origin
+    text(r_text(1),r_text(2),r_text(3),['Body ' num2str(sys.body{i}.ID)],'FontWeight','bold');
     
     % IF POINTS ON BODY, PLOT THEM
     if sys.body{i}.nPoints ~= 0
@@ -64,5 +64,5 @@ for i = 1:sys.nBodies % plot bodies in system
     end
 end
 hold off;
-
+axis equal
 end

@@ -84,7 +84,7 @@ classdef utility
             
         end
         function dij = dij(bodyi,Pi,bodyj,Qj) % vector between points Pi and Qj
-            dij = bodyj.r+bodyj.A*bodyj.point{Qj} - bodyi.r+bodyi.A*bodyi.point{Pi};
+            dij = bodyj.r+bodyj.A*bodyj.point{Qj} + -bodyi.r + -bodyi.A*bodyi.point{Pi};
         end
         function dijdot = dijdot(bodyi,Pi,bodyj,Qj) % time derivative of dij
             % from ME751_f2016 slide 7 from lecture 10/7/16
