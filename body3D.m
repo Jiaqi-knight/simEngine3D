@@ -2,6 +2,7 @@ classdef body3D < handle
     % Filename: body.m
     % Author:   Samuel Acuña
     % Date:     11 Oct 2016
+    %
     % About:
     % a generic spatial rigid body, including all the attributes of the
     % body, as well as local points on the body.This also

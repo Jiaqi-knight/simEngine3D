@@ -2,15 +2,20 @@ classdef d < handle
     % Filename: d.m
     % Author:   Samuel Acuña
     % Date:     14 Oct 2016
+    %
     % About:
     % This class handles instances of D constraints. It Uses the r-p
     % formulation (euler parameters). Removes 1 degree of Freedom.
-    % D constraint: the distance between point P on body i and point Q on
+    %
+    % D constraint: 
+    % the distance between point P on body i and point Q on
     % body j assume a specified value f, f > 0. 
     %
-    % Note: I'm using the constraint formulation from Haug eq 9.4.8, not
+    % Note: 
+    % I'm using the constraint formulation from Haug eq 9.4.8, not
     % the way it was presented in class (ME751_f2016 slide 17 from lecture
     % 09/26/16)
+    
     properties
         bodyi;  % body i
         bodyj;  % body j
@@ -53,7 +58,7 @@ classdef d < handle
             cons.fdot = fdot;
             cons.fddot = fddot;
             
-            if cons.phi ~= 0
+            if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''d'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end

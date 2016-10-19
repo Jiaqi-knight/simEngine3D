@@ -2,12 +2,16 @@ classdef cd < handle
     % Filename: cd.m
     % Author:   Samuel Acuña
     % Date:     13 Oct 2016
+    %
     % About:
     % This class handles instances of CD constraints. It Uses the r-p
     % formulation (euler parameters). Removes 1 degree of Freedom.
-    % CD constraint: the difference between the x (or y or z) coordinate of
+    %
+    % CD constraint: 
+    % the difference between the x (or y or z) coordinate of
     % point P on body i and the x (or y or z) coordinate of point Q on body
     % j assume a specified value f.
+    
     properties
         cName;  % coordinate of interest {'x','y','z'}
         bodyi;  % body i
@@ -49,7 +53,7 @@ classdef cd < handle
             cons.fdot = fdot;
             cons.fddot = fddot;
             
-            if cons.phi ~= 0
+            if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''cd'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end

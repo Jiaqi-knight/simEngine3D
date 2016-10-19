@@ -2,6 +2,7 @@
 % Filename: simEngine3D_A6P1.m
 % Author:   Samuel Acuña
 % Date:     14 Oct 2016
+%
 % About:    
 % Driver file for the simEngine3D framework, for hw6 . Defines the system, the
 % bodies in the system, and the constraints in the system.
@@ -29,6 +30,7 @@ sys.body{3}.addPoint([0;0;1]); % body 3, point 2
 %% PLOT THE SYSTEM in 3D %%
 sys.plot(1) % plot with reference frames
 % sys.plot()
+view(52,28);
 
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 

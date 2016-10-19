@@ -2,6 +2,7 @@ classdef system3D < handle
     % Filename: system.m
     % Author:   Samuel Acuña
     % Date:     11 Oct 2016
+    %
     % About:
     % the dynamical system we are modeling. This is made up of the
     % collection of bodies, as well as constraints. This also
@@ -39,6 +40,9 @@ classdef system3D < handle
                     sys.cons{ID} = constraint.cd(varargin{:}); % new instance of constraint.cd class
                 case 'd'
                     sys.cons{ID} = constraint.d(varargin{:}); % new instance of constraint.d class
+                case 'p1'
+                    sys.cons{ID} = constraint.p1(varargin{:}); % new instance of constraint.p1 class
+                    
                 otherwise
                     error('Constraint not implemented yet.');
             end

@@ -2,12 +2,16 @@ classdef dp2 < handle
     % Filename: dp2.m
     % Author:   Samuel Acuña
     % Date:     17 Oct 2016
+    %
     % About:
     % This class handles instances of DP2 constraints. It Uses the r-p
     % formulation (euler parameters). Removes 1 degree of Freedom.
-    % DP2 constraint: the dot product between vector aBari and a vector
-    % PiQj from body i to body j assume a specified value f. f is often 0,
+    %
+    % DP2 constraint: 
+    % the dot product between vector aBari and a vector PiQj 
+    % from body i to body j assume a specified value f. f is often 0,
     % meaning aBari and PiQj are orthogonal vectors.
+    
     properties
         bodyi;  % body i
         bodyj;  % body j
@@ -52,7 +56,7 @@ classdef dp2 < handle
             cons.fdot = fdot;
             cons.fddot = fddot;
             
-            if cons.phi ~= 0
+            if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''dp2'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end

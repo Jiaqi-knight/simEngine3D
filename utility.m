@@ -2,6 +2,7 @@ classdef utility
     % Filename: utility.m
     % Author:   Samuel Acuña
     % Date:     11 Oct 2016
+    %
     % About:
     % a collection of helpful static functions, these are not
     % associated with any specific class.
@@ -44,16 +45,16 @@ classdef utility
             
             p =[e0;e1;e2;e3];
         end
-        function R1 = R1(theta) % rotation matrix: about X axis by theta degrees
-            theta = theta*pi/180; %convert to radians
+        function R1 = R1(theta) % rotation matrix: about X axis by theta radians
+            %theta = theta*pi/180; %convert to radians
             R1 = [1 0 0; 0 cos(theta) -sin(theta); 0 sin(theta) cos(theta)];
         end
-        function R2 = R2(theta) % rotation matrix: about Y axis by theta degrees
-            theta = theta*pi/180; %convert to radians
+        function R2 = R2(theta) % rotation matrix: about Y axis by theta radians
+            %theta = theta*pi/180; %convert to radians
             R2 = [cos(theta) 0 sin(theta); 0 1 0; -sin(theta) 0 cos(theta)];
         end
-        function R3 = R3(theta) % rotation matrix: about Z axis by theta degrees
-            theta = theta*pi/180; %convert to radians
+        function R3 = R3(theta) % rotation matrix: about Z axis by theta radians
+            %theta = theta*pi/180; %convert to radians
             R3 = [cos(theta) -sin(theta) 0; sin(theta) cos(theta) 0; 0 0 1];
         end
         function a_tilde = tilde(a) % returns algebraic vector outer product matrix (cross product)
