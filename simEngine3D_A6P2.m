@@ -31,9 +31,7 @@ sys.body{1}.addPoint([0;1;0]); % body 1, point 2
 sys.body{1}.addPoint([0;0;1]); % body 1, point 3
 sys.body{2}.addPoint([0;0;0]); % body 2, point 1
 sys.body{2}.addPoint([0;0;1]); % body 2, point 2
-
-% sys.body{3}.addPoint([0;0;0]); % body 3, point 1
-% sys.body{3}.addPoint([0;0;1]); % body 3, point 2
+sys.body{2}.addPoint([-2;0;0]); % body 2, point 3
 
 %% PLOT THE SYSTEM in 3D %%
 sys.plot(1) % plot with reference frames
@@ -44,18 +42,8 @@ axis equal
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 
 sys.addConstraint('p1',sys.body{1},1,2,1,2,sys.body{2},1,2)
-% sys.addConstraint('d',sys.body{2},2,sys.body{1},2,1)
-% 
-% PiQj = utility.dij(sys.body{1},2,sys.body{3},2);
-% C = norm(PiQj) % distance between points Pi and Qj
-% sys.addConstraint('d',sys.body{1},2,sys.body{3},2,C)
-% 
-% sys.addConstraint('dp2',sys.body{1},2,1,2,sys.body{2},2)
-% sys.addConstraint('dp2',sys.body{2},2,1,2,sys.body{3},1)
-% 
-% 
-% % DISPLAY CONSTRAINT PROPERTIES
-% sys.cons{1} % d, 2 bodies
-% sys.cons{2} % d, body with ground
-% sys.cons{3} % dp2, 2 bodies
-% sys.cons{4} % dp2, body with ground
+sys.addConstraint('sj',sys.body{1},1,sys.body{2},3)
+ 
+% DISPLAY CONSTRAINT PROPERTIES
+sys.cons{1} % p1, body with ground
+sys.cons{2} % sj, body with ground

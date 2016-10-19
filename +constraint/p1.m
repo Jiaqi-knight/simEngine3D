@@ -20,12 +20,12 @@ classdef p1 < handle
         bBari_head; % ID number for point bBari_head on body i, head of bBari vector
         cBarj_tail; % ID number for point cBarj_tail on body j, tail of cBarj vector
         cBarj_head; % ID number for point cBarj_head on body j, head of cBarj vector
+        subCons; % cell array of sub-constraints
     end
     properties (Dependent)
         aBari;  % vector in body i RF
         bBari;  % vector in body i RF
         cBarj;  % vector in body j RF
-        subCons; % cell array of sub-constraints
         phi;    % value of the expression of the constraint PHI^dp1
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
@@ -45,8 +45,13 @@ classdef p1 < handle
             cons.cBarj_tail = cBarj_tail;
             cons.cBarj_head = cBarj_head;
                 
+            % create cell array of all sub constraints
+            % from ME751_f2016 slide 23 from lecture 09/26/16
+            cons.subCons{1} = constraint.dp1(cons.bodyi,cons.aBari_tail,cons.aBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
+            cons.subCons{2} = constraint.dp1(cons.bodyi,cons.bBari_tail,cons.bBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
+            
             if abs(cons.phi) > 1e-4
-                warning('Initial conditions for ''perpendicular1'' are not consistent. But solution will converge so constraints are satisfied.')
+                warning('Initial conditions for ''p1'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end
         function aBari = get.aBari(cons) % vector in body i RF
@@ -60,11 +65,6 @@ classdef p1 < handle
         function cBarj = get.cBarj(cons) % vector in body j RF
             % cBarj = cBarj_head - cBarj_tail
             cBarj = cons.bodyj.point{cons.cBarj_head} - cons.bodyj.point{cons.cBarj_tail};
-        end
-        function subCons = get.subCons(cons) % get cell array of all sub constraints
-            % from ME751_f2016 slide 23 from lecture 09/26/16
-            subCons{1} = constraint.dp1(cons.bodyi,cons.aBari_tail,cons.aBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
-            subCons{2} = constraint.dp1(cons.bodyi,cons.bBari_tail,cons.bBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
             % from ME751_f2016 slide 23 from lecture 09/26/16
