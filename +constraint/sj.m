@@ -40,7 +40,7 @@ classdef sj < handle
             cons.subCons{3} = constraint.cd('z',cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
                 
             if abs(cons.phi) > 1e-4
-                warning('Initial conditions for ''sj1'' are not consistent. But solution will converge so constraints are satisfied.')
+                warning('Initial conditions for ''sj'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end        
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1

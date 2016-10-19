@@ -13,24 +13,24 @@ classdef dp2 < handle
     % meaning aBari and PiQj are orthogonal vectors.
     
     properties
-        bodyi;  % body i
-        bodyj;  % body j
+        bodyi;      % body i
+        bodyj;      % body j
         aBari_tail; % ID number for point aBari_tail on body i, tail of aBari vector
         aBari_head; % ID number for point aBari_head on body i, head of aBari vector
-        Pi;     % ID number for point P on body i, tail of PiQj vector
-        Qj;     % ID number for point Q on body j, head of PiQj vector
-        f;      % prescribed constraint, often 0, but can be a function of t
-        fdot;   % derivative of f
-        fddot;  % derivative of fdot
+        Pi;         % ID number for point P on body i, tail of PiQj vector
+        Qj;         % ID number for point Q on body j, head of PiQj vector
+        f;          % prescribed constraint, often 0, but can be a function of t
+        fdot;       % derivative of f
+        fddot;      % derivative of fdot
     end
     properties (Dependent)
-        aBari;  % vector in body i RF
-        PiQj;   % vector in GLOBAL RF
-        phi;    % value of the expression of the constraint PHI^dp1
-        nu;     % right-hand side of the velocity equation
-        gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
-        phi_r;  % partial derivative of constraint with respect to r
-        phi_p;  % partial derivative of constraint with respect to p
+        aBari;      % vector in body i RF
+        PiQj;       % vector in GLOBAL RF
+        phi;        % value of the expression of the constraint PHI^dp1
+        nu;         % right-hand side of the velocity equation
+        gammaHat;   % right-hand side of the acceleration equation, in r-p formulation
+        phi_r;      % partial derivative of constraint with respect to r
+        phi_p;      % partial derivative of constraint with respect to p
     end
     
     methods
