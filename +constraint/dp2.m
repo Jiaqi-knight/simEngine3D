@@ -13,6 +13,7 @@ classdef dp2 < handle
     % meaning aBari and PiQj are orthogonal vectors.
     
     properties
+        rDOF = 1;   % removes 1 degree of freedom
         bodyi;      % body i
         bodyj;      % body j
         aBari_tail; % ID number for point aBari_tail on body i, tail of aBari vector
@@ -26,7 +27,7 @@ classdef dp2 < handle
     properties (Dependent)
         aBari;      % vector in body i RF
         PiQj;       % vector in GLOBAL RF
-        phi;        % value of the expression of the constraint PHI^dp1
+        phi;        % value of the expression of the constraint PHI^dp2
         nu;         % right-hand side of the velocity equation
         gammaHat;   % right-hand side of the acceleration equation, in r-p formulation
         phi_r;      % partial derivative of constraint with respect to r
@@ -68,7 +69,7 @@ classdef dp2 < handle
             % PiQj = vector from Pi to Qj
             PiQj = utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
         end
-        function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+        function phi = get.phi(cons) % value of the expression of the constraint PHI^dp2
             % from ME751_f2016 slide 14 from lecture 09/26/16
             % phi : [1x1]
             phi = (cons.bodyi.A*cons.aBari)'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) - cons.f;

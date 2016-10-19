@@ -13,6 +13,7 @@ classdef rj < handle
     % constraint.
     
     properties
+        rDOF = 5; % removes 5 degree of freedom
         bodyi;  % body i
         bodyj;  % body j
         Pi;     % ID number for point P on body i
@@ -26,7 +27,7 @@ classdef rj < handle
         subCons; % cell array of sub-constraints
     end
     properties (Dependent)
-        phi;    % value of the expression of the constraint PHI^dp1
+        phi;    % value of the expression of the constraint PHI^rj
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
         phi_r;  % partial derivative of constraint with respect to r
@@ -58,7 +59,7 @@ classdef rj < handle
                 warning('Initial conditions for ''sj'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end        
-        function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+        function phi = get.phi(cons) % value of the expression of the constraint PHI^rj
             % from ME751_f2016 slide 33 from lecture 09/26/16
             % phi : [5x1]
             phi = [cons.subCons{1}.phi; cons.subCons{2}.phi];

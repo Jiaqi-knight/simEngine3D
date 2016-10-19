@@ -13,6 +13,7 @@ classdef cd < handle
     % j assume a specified value f.
     
     properties
+        rDOF = 1; % removes 1 degree of freedom
         cName;  % coordinate of interest {'x','y','z'}
         bodyi;  % body i
         bodyj;  % body j
@@ -24,7 +25,7 @@ classdef cd < handle
     end
     properties (Dependent)
         c;      % unit vector of the coordinate of interest [3x1]
-        phi;    % value of the expression of the constraint PHI^dp1
+        phi;    % value of the expression of the constraint PHI^cd
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
         phi_r;  % partial derivative of constraint with respect to r
@@ -69,7 +70,7 @@ classdef cd < handle
                     error('coordinate not defined in CD constraint')
             end
         end
-        function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+        function phi = get.phi(cons) % value of the expression of the constraint PHI^cd
             % from ME751_f2016 slide 20 from lecture 09/26/16
             % phi : [1x1]
             phi = cons.c'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)-cons.f;

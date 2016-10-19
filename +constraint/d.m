@@ -17,6 +17,7 @@ classdef d < handle
     % 09/26/16)
     
     properties
+        rDOF = 1; % removes 1 degree of freedom
         bodyi;  % body i
         bodyj;  % body j
         Pi;     % ID number for point P on body i
@@ -27,7 +28,7 @@ classdef d < handle
     end
     properties (Dependent)
         PiQj;   % vector in GLOBAL RF form point P on body i to point Q on body j
-        phi;    % value of the expression of the constraint PHI^dp1
+        phi;    % value of the expression of the constraint PHI^d
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
         phi_r;  % partial derivative of constraint with respect to r
@@ -66,7 +67,7 @@ classdef d < handle
             % PiQj = vector from Pi to Qj
             PiQj = utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
         end
-        function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+        function phi = get.phi(cons) % value of the expression of the constraint PHI^d
             % from Haug 9.4.8
             % phi : [1x1]
             phi = utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj)-(cons.f)^2;

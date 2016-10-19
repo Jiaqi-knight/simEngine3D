@@ -11,6 +11,7 @@ classdef sj < handle
     % This GCon is built by using 3 cd constraints.
     
     properties
+        rDOF = 3; % removes 3 degree of freedom
         bodyi;  % body i
         bodyj;  % body j
         Pi;     % ID number for point P on body i
@@ -18,7 +19,7 @@ classdef sj < handle
         subCons; % cell array of sub-constraints
     end
     properties (Dependent)
-        phi;    % value of the expression of the constraint PHI^dp1
+        phi;    % value of the expression of the constraint PHI^sj
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
         phi_r;  % partial derivative of constraint with respect to r
@@ -43,7 +44,7 @@ classdef sj < handle
                 warning('Initial conditions for ''sj'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end        
-        function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+        function phi = get.phi(cons) % value of the expression of the constraint PHI^sj
             % from ME751_f2016 slide 27 from lecture 09/26/16
             % phi : [3x1]
             phi = [cons.subCons{1}.phi; cons.subCons{2}.phi; cons.subCons{3}.phi];

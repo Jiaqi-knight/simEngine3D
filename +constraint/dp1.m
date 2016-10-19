@@ -13,6 +13,7 @@ classdef dp1 < handle
     % orthogonal vectors
     
     properties
+        rDOF = 1; % removes 1 degree of freedom
         bodyi;  % body i
         bodyj;  % body j
         Pi;     % ID number for point P on body i, tail of aBari vector, body i RF

@@ -12,6 +12,7 @@ classdef p1 < handle
     % that plane. This GCon is built using dp1 twice.
     
     properties
+        rDOF = 2; % removes 2 degrees of freedom
         bodyi;  % body i
         bodyj;  % body j
         aBari_tail; % ID number for point aBari_tail on body i, tail of aBari vector
@@ -26,7 +27,7 @@ classdef p1 < handle
         aBari;  % vector in body i RF
         bBari;  % vector in body i RF
         cBarj;  % vector in body j RF
-        phi;    % value of the expression of the constraint PHI^dp1
+        phi;    % value of the expression of the constraint PHI^p1
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
         phi_r;  % partial derivative of constraint with respect to r
@@ -67,7 +68,7 @@ classdef p1 < handle
             % cBarj = cBarj_head - cBarj_tail
             cBarj = cons.bodyj.point{cons.cBarj_head} - cons.bodyj.point{cons.cBarj_tail};
         end
-        function phi = get.phi(cons) % value of the expression of the constraint PHI^dp1
+        function phi = get.phi(cons) % value of the expression of the constraint PHI^p1
             % from ME751_f2016 slide 23 from lecture 09/26/16
             % phi : [2x1]
             phi = [cons.subCons{1}.phi; cons.subCons{2}.phi];
