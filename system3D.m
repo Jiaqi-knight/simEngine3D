@@ -46,6 +46,8 @@ classdef system3D < handle
                     sys.cons{ID} = constraint.p2(varargin{:}); % new instance of constraint.p2 class
                 case 'sj'
                     sys.cons{ID} = constraint.sj(varargin{:}); % new instance of constraint.sj class
+                case 'rj'
+                    sys.cons{ID} = constraint.rj(varargin{:}); % new instance of constraint.rj class
                 otherwise
                     error('Constraint not implemented yet.');
             end

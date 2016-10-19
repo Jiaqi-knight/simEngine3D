@@ -23,8 +23,6 @@ R = utility.R2(pi/2)*utility.R3(theta); % initial pendulum rotation
 p = utility.A2p(R); % euler parameter for pendulum LRF rotation
 sys.addBody([0;L*sin(theta);-L*cos(theta)],p) % body 2
 
-
-sys.addBody([1;0;0]) % body 3
 %% DEFINE POINTS ON THE BODIES %%
 sys.body{1}.addPoint([0;0;0]); % body 1, point 1
 sys.body{1}.addPoint([0;1;0]); % body 1, point 2
@@ -32,7 +30,7 @@ sys.body{1}.addPoint([0;0;1]); % body 1, point 3
 sys.body{2}.addPoint([0;0;0]); % body 2, point 1
 sys.body{2}.addPoint([0;0;1]); % body 2, point 2
 sys.body{2}.addPoint([-2;0;0]); % body 2, point 3
-sys.body{3}.addPoint([0;0;0]); % body 3, point 1
+
 %% PLOT THE SYSTEM in 3D %%
 sys.plot(1) % plot with reference frames
 % sys.plot()
@@ -41,11 +39,13 @@ axis equal
 
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 
-sys.addConstraint('p1',sys.body{1},1,2,1,3,sys.body{2},1,2)
-sys.addConstraint('sj',sys.body{1},1,sys.body{2},3)
-sys.addConstraint('p2',sys.body{1},1,2,1,3,1,sys.body{3},1)
+% revolute joint with ground body
+sys.addConstraint('rj',sys.body{1},1,1,2,1,3,sys.body{2},3,1,2)
 
 
 % DISPLAY CONSTRAINT PROPERTIES
-sys.cons{1} % p1, body with ground
-sys.cons{2} % sj, body with ground
+% disp('For t=0,')
+% disp('phi^F:')
+% sys.cons{1}.phi
+% disp('phi^F:')
+
