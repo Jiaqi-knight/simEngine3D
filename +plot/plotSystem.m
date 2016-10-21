@@ -9,6 +9,7 @@ function plotSystem(sys,frames)
 %        = 0 : Don't show body reference frames.
 %
 
+
 if nargin == 1
     frames = 0;
 end
@@ -16,8 +17,10 @@ end
 
 
 figure()
+fig = gcf;
+fig.Color = [1 1 1]; % set background color to white
 
-%% PLOT GLOBAL REFERNCE FRAME
+%% PLOT GLOBAL REFERENCE FRAME
 
 plot.drawframe(sys.r,sys.p,1,1) % plot GLOBAL RF
 xlabel('X');

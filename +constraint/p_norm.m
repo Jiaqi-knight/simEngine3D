@@ -19,8 +19,8 @@ classdef p_norm < handle
         phi;    % value of the expression of the constraint PHI^p_norm
         nu;     % right-hand side of the velocity equation
         gammaHat;  % right-hand side of the acceleration equation, in r-p formulation
-%         phi_r;  % partial derivative of constraint with respect to r
-%         phi_p;  % partial derivative of constraint with respect to p
+        phi_r;  % partial derivative of constraint with respect to r
+        phi_p;  % partial derivative of constraint with respect to p
     end
     
     methods
@@ -43,46 +43,16 @@ classdef p_norm < handle
             % gammaHat : [1x1]
             gammaHat = -2*cons.bodyi.pdot'*cons.bodyi.pdot;
         end
-%         function phi_r = get.phi_r(cons) 
-%             % UNSURE
-%             % One body can be the ground. In this case, the number of columns
-%             % in the Jacobian is half. there are no partial derivatives with 
-%             % respect to r or p. Thus, we must properly dimension the size of
-%             % the vectors/matrices because the grounded body does not have 
-%             % any generalized coordinates.
-%             % phi_r : ??  [1x6] normally, unless grounded, then [1x3]
-%             
-%             phi_ri = ?? zeros(1,3);
-%             phi_rj = ?? zeros(1,3);
-%             
-%             if cons.bodyi.isGround
-%                 phi_r = [phi_rj];
-%             elseif cons.bodyj.isGround
-%                 phi_r = [phi_ri];
-%             else 
-%                 phi_r = [phi_ri, phi_rj]; 
-%             end
-%         end
-%         function phi_p = get.phi_p(cons)
-%             % UNSURE
-%             % One body can be the ground. In this case, the number of columns
-%             % in the Jacobian is half. there are no partial derivatives with 
-%             % respect to r or p. Thus, we must properly dimension the size of
-%             % the vectors/matrices because the grounded body does not have 
-%             % any generalized coordinates.
-%             % phi_p : [1x8] normally, unless grounded, then [1x4]
-%             
-%             phi_pi = ?? 
-%             phi_pj = ?? ;
-%             
-%             if cons.bodyi.isGround
-%                 phi_p = [phi_pj];
-%             elseif cons.bodyj.isGround
-%                 phi_p = [phi_pi];
-%             else 
-%                 phi_p = [phi_pi, phi_pj]; 
-%             end
-%         end
+        function phi_r = get.phi_r(cons) 
+            % from Haug eq 9.6.8
+            % phi_r :  [1x3]
+            phi_r = zeros(1,3);
+        end
+        function phi_p = get.phi_p(cons)
+            % from Haug eq 9.6.8
+            % phi_p : [1x4]
+            phi_p = 2*cons.bodyi.p';
+        end
     end
     
 end

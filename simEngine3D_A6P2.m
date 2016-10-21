@@ -28,10 +28,11 @@ sys.addBody([0;L*sin(theta);-L*cos(theta)],p) % body 2
 % these are used to specify heads and tails of vectors
 sys.body{1}.addPoint([0;0;0]); % body 1, point 1
 sys.body{1}.addPoint([0;1;0]); % body 1, point 2
-sys.body{1}.addPoint([0;0;1]); % body 1, point 3
+sys.body{1}.addPoint([0;0;-1]); % body 1, point 3
 sys.body{2}.addPoint([0;0;0]); % body 2, point 1
 sys.body{2}.addPoint([0;0;1]); % body 2, point 2
 sys.body{2}.addPoint([-2;0;0]); % body 2, point 3
+sys.body{2}.addPoint([1;0;0]); % body 2, point 4
 
 
 %% PLOT THE SYSTEM in 3D %%
@@ -46,30 +47,33 @@ axis equal
 sys.addConstraint('rj',sys.body{1},1,1,2,1,3,sys.body{2},3,1,2)
 
 % add driving constraint
-% theta = pi/4*cos(2*t); %radians
+t = 0;
+f = cos((pi*cos(2*t))/4); 
+fdot = (pi*sin(2*t)*sin((pi*cos(2*t))/4))/2;
+fddot = pi*cos(2*t)*sin((pi*cos(2*t))/4) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4))/4;
+
+sys.addConstraint('dp1',sys.body{1},1,3,sys.body{2},1,4,f,fdot,fddot) % unit length vectors
 
 % add euler parameter normalization constraints
 sys.addConstraint('p_norm')
 
 
 %% ASSEMBLE CONSTRAINT MATRIX 
-
-% next steps:
-% jacobian of p_norm constraint
-% driving constraints
-% generate full constraint matrix
-% display full jacobian, nu, gamma
+sys.assembleConstraints()
 
 %% DISPLAY CONSTRAINT PROPERTIES
 disp('For t=0,')
-disp('phi^F:')
-sys.cons{1}.phi
+disp('FULL CONSTRAINT MATRIX:')
+sys.phi
+
+disp('JACOBIAN OF FULL CONSTRAINT MATRIX:')
+sys.phi_q
 
 disp(' ')
-disp('nu:')
-sys.cons{1}.nu
+disp('NU:')
+sys.nu
 
 disp(' ')
-disp('gamma:')
-sys.cons{1}.nu
+disp('GAMMA:')
+sys.gammaHat
 
