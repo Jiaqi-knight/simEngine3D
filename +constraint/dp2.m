@@ -37,7 +37,7 @@ classdef dp2 < handle
     
     methods
         %constructor function
-        function cons = dp2(bodyi,aBari_tailID,aBari_headID,PiID,bodyj,QjID,f,fdot,fddot) %constructor function
+        function cons = dp2(bodyi,aBari_tailID,aBari_headID,PiID,bodyj,QjID,f,fdot,fddot,t) %constructor function
             if ~exist('f','var') || isempty(f)
                 f = 0; % prescribed constraint is 0, indicating vectors are orthogonal
             end
@@ -46,6 +46,9 @@ classdef dp2 < handle
             end
             if ~exist('fddot','var') || isempty(fddot)
                 fddot = 0; % derivative of fdt
+            end
+            if ~exist('t','var') || isempty(t)
+                t = 0; % default time
             end
             
             cons.bodyi = bodyi;
@@ -57,6 +60,7 @@ classdef dp2 < handle
             cons.f = f;
             cons.fdot = fdot;
             cons.fddot = fddot;
+            cons.t = t;
             
             if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''dp2'' are not consistent. But solution will converge so constraints are satisfied.')
@@ -73,20 +77,44 @@ classdef dp2 < handle
         function phi = get.phi(cons) % value of the expression of the constraint PHI^dp2
             % from ME751_f2016 slide 14 from lecture 09/26/16
             % phi : [1x1]
-            phi = (cons.bodyi.A*cons.aBari)'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) - cons.f;
+            
+            % see if constraint is a function
+            if isa(cons.f, 'function_handle')
+                fVal = cons.f(cons.t); %evaluate at time t
+            else % constant value
+                fVal = cons.f;
+            end
+            
+            phi = (cons.bodyi.A*cons.aBari)'*utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) - fVal;
         end
         function nu = get.nu(cons) % right-hand side of the velocity equation
             % from ME751_f2016 slide 12 from lecture 09/26/16
             % nu : [1x1]
-            nu = cons.fdot;
+            
+            % see if constraint is a function
+            if isa(cons.fdot, 'function_handle')
+                fdotVal = cons.fdot(cons.t); %evaluate at time t
+            else % constant value
+                fdotVal = cons.fdot;
+            end
+            
+            nu = fdotVal;
         end
         function gammaHat = get.gammaHat(cons) % right-hand side of the acceleration equation, in r-p formulation
             % from ME751_f2016 slide 8 from lecture 10/7/16
             % gammaHat : [1x1]
+            
+            % see if constraint is a function
+            if isa(cons.fddot, 'function_handle')
+                fddotVal = cons.fddot(cons.t); %evaluate at time t
+            else % constant value
+                fddotVal = cons.fddot;
+            end
+            
             gammaHat = -(cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyj.pdot,cons.bodyj.point{cons.Qj})*cons.bodyj.pdot + ...
                         (cons.bodyi.A*cons.aBari)'*utility.Bmatrix(cons.bodyi.pdot,cons.bodyi.point{cons.Pi})*cons.bodyi.pdot + ...
                        -(utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj))'*utility.Bmatrix(cons.bodyi.pdot,cons.aBari)*cons.bodyi.pdot + ...
-                       -2*(utility.Bmatrix(cons.bodyi.p,cons.aBari)*cons.bodyi.pdot)'*utility.dijdot(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) + cons.fddot;
+                       -2*(utility.Bmatrix(cons.bodyi.p,cons.aBari)*cons.bodyi.pdot)'*utility.dijdot(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj) + fddotVal;
         end
         function phi_r = get.phi_r(cons) 
             % from ME751_f2016 slide 15 from lecture 9/28/16

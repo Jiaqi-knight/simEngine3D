@@ -47,6 +47,7 @@ classdef p1 < handle
             cons.bodyj = bodyj;
             cons.cBarj_tail = cBarj_tail;
             cons.cBarj_head = cBarj_head;
+            cons.t = 0;
                 
             % create cell array of all sub constraints
             % from ME751_f2016 slide 23 from lecture 09/26/16

@@ -48,7 +48,7 @@ classdef dp1 < handle
                 fddot = 0; % derivative of fdt
             end
             if ~exist('t','var') || isempty(t)
-                t = []; % default to no time
+                t = 0; % default time
             end
             
             cons.bodyi = bodyi;

@@ -34,6 +34,7 @@ classdef sj < handle
             cons.Pi = PiID;
             cons.bodyj = bodyj;
             cons.Qj = QjID;
+            cons.t = 0;
             
             % create cell array of all sub constraints
             % from ME751_f2016 slide 27 from lecture 09/26/16

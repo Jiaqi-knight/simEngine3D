@@ -28,6 +28,7 @@ classdef p_norm < handle
         %constructor function
         function cons = p_norm(bodyi) %constructor function
             cons.bodyi = bodyi;
+            cons.t = 0;
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^p_norm
             % from ME751_f2016 slide 24 from lecture 9/28/16

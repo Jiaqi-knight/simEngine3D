@@ -22,7 +22,7 @@ classdef p2 < handle
         Pi;         % ID number for point P on body i, tail of PiQj vector
         Qj;         % ID number for point Q on body j, head of PiQj vector
         subCons;    % cell array of sub-constraints
-        t;      % system time
+        t;          % system time
     end
     properties (Dependent)
         aBari;      % vector in body i RF
@@ -46,6 +46,7 @@ classdef p2 < handle
             cons.Pi = PiID;
             cons.bodyj = bodyj;
             cons.Qj = QjID;
+            cons.t = 0;
                             
             % create cell array of all sub constraints
             % from ME751_f2016 slide 25 from lecture 09/26/16

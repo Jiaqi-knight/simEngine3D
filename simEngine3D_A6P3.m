@@ -49,10 +49,10 @@ sys.addConstraint('rj',sys.body{1},1,1,2,1,3,sys.body{2},3,1,2)
 
 % DRIVING CONSTRAINTS
 % uses dp1 constraint to specify angle of pendulum
-f = @(t)cos((pi*cos(2*t))/4); 
-fdot = @(t)((pi*sin(2*t)*sin((pi*cos(2*t))/4))/2);
-fddot = @(t)(pi*cos(2*t)*sin((pi*cos(2*t))/4) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4))/4);
-sys.addConstraint('dp1',sys.body{1},1,3,sys.body{2},1,4,f,fdot,fddot,t) % unit length vectors
+f = @(t)cos((pi*cos(2*t))/4 - pi/2);%cos((pi*cos(2*t))/4); 
+fdot = @(t)((pi*sin(2*t)*sin((pi*cos(2*t))/4 - pi/2))/2);%((pi*sin(2*t)*sin((pi*cos(2*t))/4))/2);
+fddot = @(t)(pi*cos(2*t)*sin((pi*cos(2*t))/4 - pi/2) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4 - pi/2))/4);%(pi*cos(2*t)*sin((pi*cos(2*t))/4) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4))/4);
+sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,4,f,fdot,fddot,t) % unit length vectors
 
 % EULER PARAMETER NORMALIZATION CONSTRAINTS
 sys.addConstraint('p_norm')
@@ -63,10 +63,11 @@ sys.assembleConstraints()
 %% KINEMATIC ANALYSIS
 timeStart = 0; %seconds
 timeEnd = 10;
-timeStep = 10e-3;
+timeStep = 10^-2;%10^-3;
 
 state = sys.kinematicsAnalysis(timeStart,timeEnd,timeStep);
-% save('state.mat','state')
+%save('state.mat','state')
+%load('state.mat')
 
 %% PLOT KINEMATICS
 

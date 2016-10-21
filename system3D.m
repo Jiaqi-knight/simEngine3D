@@ -91,6 +91,9 @@ classdef system3D < handle
             % perform kinematics analysis on the system. System must be
             % fully constrained (nDOF = 0).
             % time inputs are measured in seconds.
+            % output:
+            %   state = [time x [q,qdot,qddot]]
+            %           e.g. for one body with 100 timesteps: [100x7x3]
             
             if ~exist('timeStep','var') || isempty(timeStep)
                 timeStep = 10e-3; % default time step
@@ -103,7 +106,7 @@ classdef system3D < handle
             % iterate throughout the time grid            
             for iT = 1:length(timeGrid)
                 t = timeGrid(iT); % current time step
-                sys.time = t; % set system time
+                sys.setSystemTime(t); % set system time
                 
                 % Position Analysis
                 if t ~= timeStart % except at initial conditions
@@ -331,6 +334,14 @@ classdef system3D < handle
                 end
             end
         end
+        function setSystemTime(sys,t) % set time for entire system
+            % set system time
+            sys.time = t;
+            % update constraints time
+            for i = 1:sys.nConstraints
+                sys.cons{i}.t = t;
+            end
+        end
         function state = storeSystemState(sys) 
             % store position and orientation information for the current
             % time step
@@ -380,14 +391,6 @@ classdef system3D < handle
                 end
             end
             nDOF = sys.nGenCoordinates - rDOF;
-        end
-        function set.time(sys,t) % update system time
-            % set system time
-            sys.time = t;
-            % update constraints time
-            for i = 1:sys.nConstraints
-                sys.cons{i}.t = t;
-            end
         end
     end
 end
