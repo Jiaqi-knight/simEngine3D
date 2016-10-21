@@ -23,6 +23,7 @@ classdef dp2 < handle
         f;          % prescribed constraint, often 0, but can be a function of t
         fdot;       % derivative of f
         fddot;      % derivative of fdot
+        t;          % system time
     end
     properties (Dependent)
         aBari;      % vector in body i RF

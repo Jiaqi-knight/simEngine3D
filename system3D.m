@@ -13,13 +13,18 @@ classdef system3D < handle
         p = [1;0;0;0];  % Global Euler Parameters
         body;           % collection of bodies in the system, inlcuding ground bodies
         cons;           % collection of constraints in the system
+        q;              % q = [r;p] vector, generalized coordinates of ungrounded bodies
+        qdot;           % time derivaite of q vector
+        qddot;          % 2nd time derivaite of q vector
         phi;            % full constraint matrix
         phi_q;          % jacobian of phiF
         nu;             % RHS of velocity equation
-        gammaHat;       % RHS of acceleration equation, in r-p formulation          
+        gammaHat;       % RHS of acceleration equation, in r-p formulation
+        time;           % current time within the system
     end
     
     properties (Dependent)
+        bodyIDs;            % ID numbers of ungrounded bodies in the system
         nBodies;            % number of bodies in the system
         nGrounds;           % number of grounded bodies in the system
         nGenCoordinates;    % number of generalized coordinates in system
@@ -38,6 +43,7 @@ classdef system3D < handle
             sys.phi_q = []; 
             sys.nu = [];
             sys.gammaHat = [];
+            sys.time = [];
         end
         function addBody(sys,varargin) % add a body to the system
             ID = sys.nBodies+1; %body ID number
@@ -74,16 +80,59 @@ classdef system3D < handle
                     error('Constraint not implemented yet.');
             end
         end
-        function assembleConstraints(sys)
-            sys.constructPhi();   % construct phiF matrix
-            sys.constructPhi_q(); % construct phiF_q matrix
+        function assembleConstraints(sys) % construct phi matrices 
+            sys.constructPhi();   % construct phi matrix
+            sys.constructPhi_q(); % construct phi_q matrix
             sys.constructNu();    % construct RHS of velocity equation
             sys.constructGammaHat();%construct RHS of acceleration equation
+            sys.constructQ();     % construct q (r and p) of bodies in system
+        end
+        function state = kinematicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform kinematics analysis
+            % perform kinematics analysis on the system. System must be
+            % fully constrained (nDOF = 0).
+            % time inputs are measured in seconds.
+            
+            if ~exist('timeStep','var') || isempty(timeStep)
+                timeStep = 10e-3; % default time step
+            end
+            
+            timeGrid = timeStart:timeStep:timeEnd;
+            
+            state = zeros(length(timeGrid),sys.nGenCoordinates,3); % preallocate for saved state
+            
+            % iterate throughout the time grid            
+            for iT = 1:length(timeGrid)
+                t = timeGrid(iT); % current time step
+                sys.time = t; % set system time
+                
+                % Position Analysis
+                if t ~= timeStart % except at initial conditions
+                    % solve for r and p
+                    tolerance = 1e-9;  % tolerance
+                    maxIterations = 50; % maximum iterations
+                    sys.positionAnalysis(tolerance,maxIterations)
+                end
+                
+                % to prevent singularities, check jacobian. Later...
+                
+                % solve for velocities
+                sys.velocityAnalysis();
+                
+                % solve for accelerations
+                sys.accelerationAnalysis();
+                
+                % store system state
+                state(iT,:,:,:) = sys.storeSystemState();
+                
+                disp(['Kinematics analysis completed for t = ' num2str(t) ' sec.']);
+            end
         end
         function plot(sys,varargin) % plots the bodies in the system
             % wrapper to plot functions
             plot.plotSystem(sys,varargin{:});
         end
+    end
+    methods (Access = private)
         function constructPhi(sys) % construct phiF matrix (full constraint matrix)
             % phi = [nConstrainedDOF x 1]
             sys.phi = zeros(sys.nConstrainedDOF,1); % initialize phi for speed
@@ -109,14 +158,7 @@ classdef system3D < handle
             phi_p = zeros(sys.nConstrainedDOF,4*(sys.nBodies-sys.nGrounds)); % initialize phi_p for speed
             
             % get ID's of bodies that are not grounded
-            bodyID = zeros([sys.nBodies-sys.nGrounds],1); %initialize size
-            j = 1; % counter 
-            for i = 1:sys.nBodies
-                if ~sys.body{i}.isGround
-                    bodyID(j) = sys.body{i}.ID; % pull body ID
-                    j = j+1; % increment counter
-                end
-            end
+            bodyID = sys.bodyIDs;
             
             % loop through constraints
             row = 1; %counter
@@ -152,7 +194,7 @@ classdef system3D < handle
             row = 1;
             for i = 1:sys.nConstraints
                 row_new = row + sys.cons{i}.rDOF - 1;
-                sys.phi(row:row_new)  =  sys.cons{i}.nu; % plug in constraint nu's
+                sys.nu(row:row_new)  =  sys.cons{i}.nu; % plug in constraint nu's
                 row = row_new + 1;
             end
         end
@@ -162,12 +204,150 @@ classdef system3D < handle
             row = 1;
             for i = 1:sys.nConstraints
                 row_new = row + sys.cons{i}.rDOF - 1;
-                sys.phi(row:row_new)  =  sys.cons{i}.gammaHat; % plug in constraint nu's
+                sys.gammaHat(row:row_new)  =  sys.cons{i}.gammaHat; % plug in constraint gammaHats's
                 row = row_new + 1;
             end
         end
+        function constructQ(sys) % construct q (r and p) of bodies in system
+            % get ID's of bodies that are not grounded
+            bodyID = sys.bodyIDs;
+            
+            % initialize for speed
+            r = zeros(3*length(bodyID),1);
+            p = zeros(4*length(bodyID),1);
+            
+            % pull r and p out of ungrounded bodies
+            rowr = 1; % r count
+            rowp = 1; % p count
+            for i = bodyID  
+                r(rowr:rowr+2) = sys.body{i}.r;
+                p(rowp:rowp+3) = sys.body{i}.p;
+                rowr = rowr + 3;
+                rowp = rowp + 4;
+            end
+            
+            sys.q = [r;p]; % assemble q vector
+        end
+        function positionAnalysis(sys,tolerance,maxIterations) % position analysis of system
+            % Performs kinematic position analysis using Newton-Raphson method
+
+            guessQ = sys.q; % initial guess
+            
+            for i = 1:maxIterations % iterate
+                sys.constructPhi();   % get constraint matrix
+                sys.constructPhi_q(); % get jacobian
+                correction = sys.phi_q\sys.phi; % correction 
+                guessQ = guessQ - correction; % update guess
+                
+                % update bodies
+                sys.updateSystem(guessQ,[],[]);
+                
+                if norm(correction) < tolerance %check for convergence
+                    break;
+                end
+            end
+            if i >= maxIterations
+                error('Failed to converge position analysis, the maximum number of iterations is reached')
+            end
+            
+        end
+        function velocityAnalysis(sys) % solve for velocities of the system
+            % compute velocity and derivative of euler parameters
+            % for a given time (t)
+            
+            % calculate RHS of velocity equation
+            sys.constructNu();
+            
+            % find jacobian of phi
+            sys.constructPhi_q();
+            
+            % solve for velocities (qdot)
+            qdot = sys.phi_q\sys.nu;
+            
+            % update bodies
+            sys.updateSystem([],qdot,[]);
+        end
+        function accelerationAnalysis(sys) % solve for accelerations of the system
+            % compute acceleration and 2nd derivative of euler parameters
+            % for a given time (t)
+            
+            % calculate RHS of acceleration equation
+            sys.constructGammaHat();
+            
+            % already find jacobian of phi
+            
+            % solve for accelerations (qddot)
+            qddot = sys.phi_q\sys.gammaHat;
+            
+            % update bodies
+            sys.updateSystem([],[],qddot);
+        end
+        function updateSystem(sys,q,qdot,qddot) %update r,p,and derivatives for each body in system
+            %%% update q (r and p)
+            if ~isempty(q)
+                sys.q = q;
+                r = q(1:3*(sys.nBodies-sys.nGrounds));
+                p = q(3*(sys.nBodies-sys.nGrounds)+1:end);
+                
+                rowr = 1;
+                rowp = 1;
+                for i = sys.bodyIDs
+                    sys.body{i}.r = r(rowr:rowr+2);
+                    sys.body{i}.p = p(rowp:rowp+3);
+                    rowr = rowr + 3;
+                    rowp = rowp + 4;
+                end
+            end
+            
+            %%% update qdot (rdot and pdot)
+            if ~isempty(qdot)
+                sys.qdot = qdot;
+                rdot = qdot(1:3*(sys.nBodies-sys.nGrounds));
+                pdot = qdot(3*(sys.nBodies-sys.nGrounds)+1:end);
+                
+                rowr = 1;
+                rowp = 1;
+                for i = sys.bodyIDs
+                    sys.body{i}.rdot = rdot(rowr:rowr+2);
+                    sys.body{i}.pdot = pdot(rowp:rowp+3);
+                    rowr = rowr + 3;
+                    rowp = rowp + 4;
+                end
+            end
+            
+            %%% update qddot (rddot and pddot)
+            if ~isempty(qddot)
+                sys.qddot = qddot;
+                rddot = qddot(1:3*(sys.nBodies-sys.nGrounds));
+                pddot = qddot(3*(sys.nBodies-sys.nGrounds)+1:end);
+                
+                rowr = 1;
+                rowp = 1;
+                for i = sys.bodyIDs
+                    sys.body{i}.rddot = rddot(rowr:rowr+2);
+                    sys.body{i}.pddot = pddot(rowp:rowp+3);
+                    rowr = rowr + 3;
+                    rowp = rowp + 4;
+                end
+            end
+        end
+        function state = storeSystemState(sys) 
+            % store position and orientation information for the current
+            % time step
+            state = [sys.q,sys.qdot,sys.qddot];
+        end
     end
     methods % methods block with no attributes
+        function bodyIDs = get.bodyIDs(sys) % calculate ID numbers of ungrounded bodies in the system
+            bodyIDs = zeros([sys.nBodies-sys.nGrounds],1); %initialize size
+            j = 1; % counter 
+            for i = 1:sys.nBodies
+                if ~sys.body{i}.isGround
+                    bodyIDs(j) = sys.body{i}.ID; % pull body ID
+                    j = j+1; % increment counter
+                end
+            end
+        end
         function nBodies = get.nBodies(sys) % calculate number of bodies in system
             nBodies = length(sys.body);
         end
@@ -200,6 +380,14 @@ classdef system3D < handle
                 end
             end
             nDOF = sys.nGenCoordinates - rDOF;
+        end
+        function set.time(sys,t) % update system time
+            % set system time
+            sys.time = t;
+            % update constraints time
+            for i = 1:sys.nConstraints
+                sys.cons{i}.t = t;
+            end
         end
     end
 end

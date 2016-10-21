@@ -25,6 +25,7 @@ classdef d < handle
         f;      % prescribed distance constraint, > 0, and can be a function of t.
         fdot;   % derivative of f
         fddot;  % derivative of fdot
+        t;      % system time
     end
     properties (Dependent)
         PiQj;   % vector in GLOBAL RF form point P on body i to point Q on body j

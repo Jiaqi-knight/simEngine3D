@@ -14,6 +14,7 @@ classdef p_norm < handle
     properties
         rDOF = 1; % removes 1 degree of freedom
         bodyi;  % body i
+        t;      % system time
     end
     properties (Dependent)
         phi;    % value of the expression of the constraint PHI^p_norm

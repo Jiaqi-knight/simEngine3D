@@ -22,6 +22,7 @@ classdef p2 < handle
         Pi;         % ID number for point P on body i, tail of PiQj vector
         Qj;         % ID number for point Q on body j, head of PiQj vector
         subCons;    % cell array of sub-constraints
+        t;      % system time
     end
     properties (Dependent)
         aBari;      % vector in body i RF

@@ -22,6 +22,7 @@ classdef p1 < handle
         cBarj_tail; % ID number for point cBarj_tail on body j, tail of cBarj vector
         cBarj_head; % ID number for point cBarj_head on body j, head of cBarj vector
         subCons; % cell array of sub-constraints
+        t;      % system time
     end
     properties (Dependent)
         aBari;  % vector in body i RF

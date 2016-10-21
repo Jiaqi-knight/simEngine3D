@@ -22,6 +22,7 @@ classdef cd < handle
         f;      % prescribed constraint, often 0, but can be a function of t
         fdot;   % derivative of f
         fddot;  % derivative of fdot
+        t;      % system time
     end
     properties (Dependent)
         c;      % unit vector of the coordinate of interest [3x1]

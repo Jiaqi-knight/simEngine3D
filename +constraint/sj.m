@@ -17,6 +17,7 @@ classdef sj < handle
         Pi;     % ID number for point P on body i
         Qj;     % ID number for point Q on body j
         subCons; % cell array of sub-constraints
+        t;      % system time
     end
     properties (Dependent)
         phi;    % value of the expression of the constraint PHI^sj

@@ -13,6 +13,8 @@ classdef body3D < handle
         p;        % = [e0;e1;e2;e3] euler parameters of BODY RF
         rdot;     % = [3x1] time derivative of position r
         pdot;     % = [4x1] time derivative of euler parameters p
+        rddot;    % = [3x1] time derivative of position r
+        pddot;    % = [4x1] time derivative of euler parameters p
         m;        % mass of the part
         J;        % inertia tensor of the part
         isGround; % if body is ground
@@ -52,6 +54,8 @@ classdef body3D < handle
             body.p = p;
             body.rdot = rdot;
             body.pdot = pdot;
+            body.rddot = [0;0;0]; % add this as parameter
+            body.pddot = [0;0;0]; % add this as parameter
             body.m = m;
             body.J = J;
             body.isGround = isGround;
