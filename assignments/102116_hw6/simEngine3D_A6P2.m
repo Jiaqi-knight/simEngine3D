@@ -9,6 +9,11 @@
 
 clear; clc; close all
 
+% access directory with simEngine in it.
+currentpath = cd('..'); cd('..');
+addpath(pwd); % add grandparent folder to path
+cd(currentpath); % return to initial folder
+
 %% DEFINE SYSTEM %%
 
 sys = system3D(); %initialize system
