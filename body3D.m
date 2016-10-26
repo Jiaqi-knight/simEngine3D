@@ -25,27 +25,38 @@ classdef body3D < handle
         A; % rotation matrix, an expression of the euler parameters
     end
     methods (Access = public)
-        function body = body3D(ID,r,p,rdot,pdot,m,J,isGround) %constructor function
-            if ~exist('isGround','var') || isempty(isGround)
-                isGround = 0; % body is not ground
+        function body = body3D(ID,bodyType,r,p,rdot,pdot,rddot,pddot,m,J) %constructor function
+            switch bodyType
+                case 'ground'
+                    isGround = 1;
+                case 'free'
+                    isGround = 0;
+                otherwise
+                    error('specified body type is not permitted');
             end
-            if ~exist('J','var') || isempty(J) || isGround == 1
-                J = zeros(3); % body has no inertia
+            if ~exist('r','var') || isempty(r)
+                r = [0;0;0]; % body located at origin
             end
-            if ~exist('m','var') || isempty(m) || isGround == 1
-                m = 0; % body has no mass
+            if ~exist('p','var') || isempty(p)
+                p = [1;0;0;0]; % no change in body orientation from GLOBAL RF
+            end       
+            if ~exist('rdot','var') || isempty(rdot) || isGround == 1
+                rdot = [0;0;0]; % no velocity change in body position
             end
             if ~exist('pdot','var') || isempty(pdot) || isGround == 1
                 pdot = [0;0;0;0]; % no velocity change in body orientation
             end
-            if ~exist('rdot','var') || isempty(rdot) || isGround == 1
-                rdot = [0;0;0]; % no velocity change in body position
+            if ~exist('rddot','var') || isempty(rddot) || isGround == 1
+                rddot = [0;0;0]; % no velocity change in body position
             end
-            if ~exist('p','var') || isempty(p)
-                p = [1;0;0;0]; % no change in body orientation from GLOBAL RF
+            if ~exist('pddot','var') || isempty(pddot) || isGround == 1
+                pddot = [0;0;0;0]; % no velocity change in body orientation
             end
-            if ~exist('r','var') || isempty(r)
-                r = [0;0;0]; % body located at origin
+            if ~exist('m','var') || isempty(m) || isGround == 1
+                m = 0; % body has no mass
+            end
+            if ~exist('J','var') || isempty(J) || isGround == 1
+                J = zeros(3); % body has no inertia
             end
             
             % instantiate body properties
@@ -54,8 +65,8 @@ classdef body3D < handle
             body.p = p;
             body.rdot = rdot;
             body.pdot = pdot;
-            body.rddot = [0;0;0]; % add this as parameter
-            body.pddot = [0;0;0]; % add this as parameter
+            body.rddot = rddot;
+            body.pddot = pddot;
             body.m = m;
             body.J = J;
             body.isGround = isGround;
@@ -69,8 +80,7 @@ classdef body3D < handle
                 aBar = [0;0;0]; % point located at origin of body
             end
             body.point{body.nPoints+1} = aBar;
-        end
-        
+        end 
     end
     methods % methods block with no attributes
         function nPoints = get.nPoints(body) % calculate number of bodies in system

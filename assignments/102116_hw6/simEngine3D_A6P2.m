@@ -19,7 +19,7 @@ cd(currentpath); % return to initial folder
 sys = system3D(); %initialize system
 
 %% DEFINE BODIES IN THE SYSTEM %%
-sys.addBody([0;0;0],[],[],[],[],[],1) % body 1, ground
+sys.addBody('ground') % body 1, ground
 
 t = 0;
 L = 2;
@@ -27,7 +27,7 @@ theta = pi/4*cos(2*t); %radians
 R = utility.R2(pi/2)*utility.R3(theta); % initial pendulum rotation
 p = utility.A2p(R); % euler parameter for pendulum LRF rotation
 
-sys.addBody([0;L*sin(theta);-L*cos(theta)],p) % body 2
+sys.addBody('free',[0;L*sin(theta);-L*cos(theta)],p) % body 2
 
 %% DEFINE POINTS ON THE BODIES %%
 % these are used to specify heads and tails of vectors

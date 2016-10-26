@@ -20,9 +20,9 @@ sys = system3D(); %initialize system
 p = utility.A2p(utility.R1(45)); % euler parameter for 45 deg rot about X axis
 
 %% DEFINE BODIES IN THE SYSTEM %%
-sys.addBody([1;1;1],p) % body 1
-sys.addBody([1;1;0],p) % body 2
-sys.addBody([0;1;0],p,[],[],[],[],1) % body 3, ground
+sys.addBody('free',[1;1;1],p) % body 1
+sys.addBody('free',[1;1;0],p) % body 2
+sys.addBody('ground',[0;1;0],p) % body 3, ground
 
 
 %% DEFINE POINTS ON THE BODIES %%
