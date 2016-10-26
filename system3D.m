@@ -17,7 +17,9 @@ classdef system3D < handle
         qdot;           % time derivaite of q vector
         qddot;          % 2nd time derivaite of q vector
         phi;            % full constraint matrix
-        phi_q;          % jacobian of phiF
+        phi_q;          % jacobian of phi
+        phi_r;          % jacobian of phi, with respect to r only
+        phi_p;          % jacobian of phi, with respect to p only
         nu;             % RHS of velocity equation
         gammaHat;       % RHS of acceleration equation, in r-p formulation
         time;           % current time within the system
@@ -40,7 +42,9 @@ classdef system3D < handle
             
             % empty for now, construct with assembleConstraints function:
             sys.phi = []; 
-            sys.phi_q = []; 
+            sys.phi_q = [];
+            sys.phi_r = [];
+            sys.phi_p = [];
             sys.nu = [];
             sys.gammaHat = [];
             sys.time = [];
@@ -90,34 +94,42 @@ classdef system3D < handle
         function state = kinematicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform kinematics analysis
             % perform kinematics analysis on the system. System must be
             % fully constrained (nDOF = 0).
-            % time inputs are measured in seconds.
+            % inputs: measured in seconds.
+            %   timeStart : the starting time of simulation, usually 0
+            %   timeEnd   : ending time of simulation
+            %   timeStep  : step size of time during stimulation (optional)
+            %
             % output:
-            %   state = [time x [q,qdot,qddot]]
-            %           e.g. for one body with 100 timesteps: [100x7x3]
+            %   state = cell array of states of system
+            %
+            % to further clarify, each cell of state is a structure,
+            % defining the state of system. For example, at timePoint 1:
+            %   state{1}.time
+            %   state{1}.q 
+            %   state{1}.qdot
+            %   state{1}.qddot 
             
+            if sys.nDOF >0
+                error('For kinematics analysis, the total number of degrees of freedom must be zero.');
+            end
             if ~exist('timeStep','var') || isempty(timeStep)
-                timeStep = 10e-3; % default time step
+                timeStep = 10^-2; % default time step
             end
             
             timeGrid = timeStart:timeStep:timeEnd;
             
-            state = zeros(length(timeGrid),sys.nGenCoordinates,3); % preallocate for saved state
+            state = cell(length(timeGrid),1); % preallocate for saved state
             
             % iterate throughout the time grid            
             for iT = 1:length(timeGrid)
                 t = timeGrid(iT); % current time step
                 sys.setSystemTime(t); % set system time
                 
-                % Position Analysis
+                % solve for positions
                 if t ~= timeStart % except at initial conditions
-                    % solve for r and p
-                    tolerance = 1e-9;  % tolerance
-                    maxIterations = 50; % maximum iterations
-                    sys.positionAnalysis(tolerance,maxIterations)
+                    sys.positionAnalysis()
                 end
-                
-                % to prevent singularities, check jacobian. Later...
-                
+               
                 % solve for velocities
                 sys.velocityAnalysis();
                 
@@ -125,10 +137,99 @@ classdef system3D < handle
                 sys.accelerationAnalysis();
                 
                 % store system state
-                state(iT,:,:,:) = sys.storeSystemState();
+                state{iT} = sys.getSystemState();
                 
                 disp(['Kinematics analysis completed for t = ' num2str(t) ' sec.']);
             end
+        end
+        function state = inverseDynamicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform inverse Dynamics Analysis
+            % inverse dynamics: specify motion of the mechanical system,
+            % and we find the set of forces/torques that were actually
+            % applied to the mechanical system to lead to this motion.
+            % 
+            % System must be fully constrained (nDOF = 0).
+            %
+            % inputs: measured in seconds.
+            %   timeStart : the starting time of simulation, usually 0
+            %   timeEnd   : ending time of simulation
+            %   timeStep  : step size of time during stimulation (optional)
+            %
+            % output:
+            %   state = cell array of states of system
+            %
+            % to further clarify, each cell of state is a structure,
+            % defining the state of system. For example, at timePoint 1:
+            %   state{1}.time
+            %   state{1}.q 
+            %   state{1}.qdot
+            %   state{1}.qddot 
+            
+            % ADD MORE STATE VALUES!!! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            
+            if sys.nDOF >0
+                error('For inverse dynamics analysis, the total number of degrees of freedom must be zero.');
+            end
+            if ~exist('timeStep','var') || isempty(timeStep)
+                timeStep = 10^-2; % default time step
+            end
+            
+            timeGrid = timeStart:timeStep:timeEnd;
+            
+            state = cell(length(timeGrid),1); % preallocate for saved state
+            
+            % iterate throughout the time grid
+            for iT = 1:length(timeGrid)
+                t = timeGrid(iT); % current time step
+                sys.setSystemTime(t); % set system time
+                
+                %%%%%%%%%%
+                % STEP ONE: solve linear system for rddot and pddot
+                
+                % solve for positions
+                if t ~= timeStart % except at initial conditions                  
+                    sys.positionAnalysis(tolerance,maxIterations)
+                end
+               
+                % solve for velocities
+                sys.velocityAnalysis();
+                
+                % solve for accelerations
+                sys.accelerationAnalysis();
+                
+                %%%%%%%%%%
+                % STEP TWO: Solve for the Lagrange multipliers (lambda)
+                
+                % write the equations of motion for r-p formuation (slide 28 of
+                % ME751_f2016 lecture 10/05/16) in a form for Inv. Dyn., like
+                % is done on slide 8 of ME751_f2016 lecture 10/10/16.
+                % Thus, the lagrange matrix becomes:
+                %   [phi_r' zeros(3*nb,nb);
+                %    phi_p'        P'      ]
+                % this is also seen on slide 12 of ME751_f2016 lecture 10/10/16.
+                lagrangeMatrix = [sys.phi_r' zeros(3*sys.nBodies,sys.nBodies);
+                                  sys.phi_p'  0]; %%%%%%%%%% fix this
+                    
+                %    lambda = invDynMatrix\invDynRHS;
+                    
+                    
+
+                
+                % STEP THREE: recover the reaction forces and/or torques that
+                % should act on each body so taht the system experiences the
+                % motion you prescribed.
+                
+                % store system state
+                %   state: position and orientation information (q) for all
+                %          points in time across a time grid
+                %          i.e.
+                %          state = [pointInTime,sys.q,sys.qdot,sys.qddot]
+                %
+
+                %state{iT} = sys.getSystemState();
+                
+                %disp(['Kinematics analysis completed for t = ' num2str(t) ' sec.']);
+            end
+            
         end
         function plot(sys,varargin) % plots the bodies in the system
             % wrapper to plot functions
@@ -150,6 +251,7 @@ classdef system3D < handle
             % phi_q = partial derivative of sys.phi with respect to the
             % generalized coordinates
             % phi_q = [nConstrainedDOF x nGenCoordinates]
+            % phi_q = [phi_r phi_q];
             %
             % For every constraint, pull phi_r and phi_p, then insert into
             % correct location for the jacobian. This location depends on
@@ -189,6 +291,8 @@ classdef system3D < handle
             end
             
             % create phi_q
+            sys.phi_r = phi_r;
+            sys.phi_p = phi_p;
             sys.phi_q = [phi_r phi_p];
         end
         function constructNu(sys) % construct nu, RHS Of velocity equation
@@ -233,7 +337,14 @@ classdef system3D < handle
         end
         function positionAnalysis(sys,tolerance,maxIterations) % position analysis of system
             % Performs kinematic position analysis using Newton-Raphson method
-
+            
+            if ~exist('tolerance','var') || isempty(tolerance)
+                tolerance = 1e-9;  % default tolerance
+            end
+            if ~exist('tolerance','var') || isempty(tolerance)
+                maxIterations = 50; % default maximum iterations
+            end
+             
             guessQ = sys.q; % initial guess
             
             for i = 1:maxIterations % iterate
@@ -277,7 +388,7 @@ classdef system3D < handle
             % calculate RHS of acceleration equation
             sys.constructGammaHat();
             
-            % already find jacobian of phi
+            % already found jacobian of phi
             
             % solve for accelerations (qddot)
             qddot = sys.phi_q\sys.gammaHat;
@@ -342,10 +453,13 @@ classdef system3D < handle
                 sys.cons{i}.t = t;
             end
         end
-        function state = storeSystemState(sys) 
-            % store position and orientation information for the current
+        function currentState = getSystemState(sys) 
+            % return position and orientation information for the current
             % time step
-            state = [sys.q,sys.qdot,sys.qddot];
+            currentState.time = sys.time;
+            currentState.q = sys.q;
+            currentState.qdot = sys.qdot;
+            currentState.qddot = sys.qddot;
         end
     end
     methods % methods block with no attributes

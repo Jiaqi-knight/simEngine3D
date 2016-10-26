@@ -81,6 +81,15 @@ classdef body3D < handle
             end
             body.point{body.nPoints+1} = aBar;
         end 
+        function setMass(body,mass) % specify body mass
+            body.m = mass;
+        end
+        function setInertia(body,inertiaTensor) % specify body inertia tensor
+            if ~isequal(size(inertiaTensor),[3 3])
+                error('body inertia must be a 3x3 matrix')
+            end
+            body.J = inertiaTensor;
+        end
     end
     methods % methods block with no attributes
         function nPoints = get.nPoints(body) % calculate number of bodies in system

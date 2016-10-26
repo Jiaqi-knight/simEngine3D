@@ -71,23 +71,31 @@ timeEnd = 10;
 timeStep = 10^-2;%10^-3;
 
 state = sys.kinematicsAnalysis(timeStart,timeEnd,timeStep);
-%save('state.mat','state')
-%load('state.mat')
+%save('state_A6P3.mat','state')
+%load('state_A6P3.mat')
 
 %% PLOT KINEMATICS
 
 time = timeStart:timeStep:timeEnd;
 
-% origin of pendulum
-rOprime(:,1)     = state(:,1,1); rOprime(:,2)     = state(:,2,1); rOprime(:,3)     = state(:,3,1);
-rdotOprime(:,1)  = state(:,1,2); rdotOprime(:,2)  = state(:,2,2); rdotOprime(:,3)  = state(:,3,2);
-rddotOprime(:,1) = state(:,1,3); rddotOprime(:,2) = state(:,2,3); rddotOprime(:,3) = state(:,3,3);
-pOprime(:,1)     = state(:,4,1); pOprime(:,2)     = state(:,5,1); pOprime(:,3)     = state(:,6,1); pOprime(:,4)     = state(:,7,1);
-pdotOprime(:,1)  = state(:,4,2); pdotOprime(:,2)  = state(:,5,2); pdotOprime(:,3)  = state(:,6,2); pdotOprime(:,4)  = state(:,7,2);
-pddotOprime(:,1) = state(:,4,3); pddotOprime(:,2) = state(:,5,3); pddotOprime(:,3) = state(:,6,3); pddotOprime(:,4) = state(:,7,3);
+% kinematics for pendulum, the Oprime frame
+rOprime = zeros(length(state),3); % preallocate for speed
+rdotOprime = zeros(length(state),3);
+rddotOprime = zeros(length(state),3);
+for i = 1:length(state)
+    rOprime(i,1) = state{i}.q(1); % x value of rOprime
+    rOprime(i,2) = state{i}.q(2); % y value of rOprime
+    rOprime(i,3) = state{i}.q(3); % z value of rOprime
+    rdotOprime(i,1) = state{i}.qdot(1); % xdot value of rOprime
+    rdotOprime(i,2) = state{i}.qdot(2); % ydot value of rOprime
+    rdotOprime(i,3) = state{i}.qdot(3); % zdot value of rOprime
+    rddotOprime(i,1) = state{i}.qddot(1); % xddot value of rOprime
+    rddotOprime(i,2) = state{i}.qddot(2); % yddot value of rOprime
+    rddotOprime(i,3) = state{i}.qddot(3); % zddot value of rOprime
+end
 
-
-figure
+% plot position, velocity, acceleration of Oprime
+figure 
 subplot(3,1,1)
 hold on
 plot(time,rOprime(:,1))
@@ -122,16 +130,19 @@ legend('X','Y','Z')
 hold off
 
 
-% point Q, at the hinge
+% derive kinematics of point Q, at the hinge
 sBar = [-2 0 0]';
-rQ     = zeros(length(time),3);
-rQdot  = zeros(length(time),3);
-rQddot = zeros(length(time),3);
-for i = 1:length(time)
-    p = pOprime(i,:)';
-    pdot = pdotOprime(i,:)';
-    pddot = pddotOprime(i,:)';
+rQ          = zeros(length(state),3);
+rQdot       = zeros(length(state),3);
+rQddot      = zeros(length(state),3);
+
+for i = 1:length(state)
+    % get pOprime
+    p     = state{i}.q(4:7); 
+    pdot  = state{i}.qdot(4:7); 
+    pddot = state{i}.qddot(4:7); 
     
+    % derive rQ
     A = utility.p2A(p);
     B = utility.Bmatrix(p,sBar);
     Bdot = utility.Bmatrix(pdot,sBar);
@@ -140,6 +151,7 @@ for i = 1:length(time)
     rQddot(i,:) = rddotOprime(i,:)' + B*pddot + Bdot*pdot;
 end
 
+% plot position, velocity, acceleration of point Q
 figure
 subplot(3,1,1)
 hold on
