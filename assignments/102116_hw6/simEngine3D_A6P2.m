@@ -59,9 +59,6 @@ fddot = pi*cos(2*t)*sin((pi*cos(2*t))/4) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4)
 
 sys.addConstraint('dp1',sys.body{1},1,3,sys.body{2},1,4,f,fdot,fddot) % unit length vectors
 
-% add euler parameter normalization constraints
-sys.addConstraint('p_norm')
-
 
 %% ASSEMBLE CONSTRAINT MATRIX 
 sys.assembleConstraints()
@@ -69,16 +66,16 @@ sys.assembleConstraints()
 %% DISPLAY CONSTRAINT PROPERTIES
 disp('For t=0,')
 disp('FULL CONSTRAINT MATRIX:')
-sys.phi
+sys.phiF
 
 disp('JACOBIAN OF FULL CONSTRAINT MATRIX:')
-sys.phi_q
+sys.phiF_q
 
 disp(' ')
 disp('NU:')
-sys.nu
+sys.nuF
 
 disp(' ')
 disp('GAMMA:')
-sys.gammaHat
+sys.gammaHatF
 

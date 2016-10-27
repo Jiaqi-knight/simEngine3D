@@ -31,16 +31,16 @@ p = utility.A2p(R); % euler parameter for pendulum LRF rotation
 sys.addBody('free',[0;L*sin(theta);-L*cos(theta)],p); % add body 2
 
 % set body 2 mass
-rho = 7800; length = 4; width = 0.05; 
-volume = length*width*width;
+rho = 7800; Length = 4; width = 0.05; 
+volume = Length*width*width;
 mass = rho*volume;
 sys.body{2}.setMass(mass);
 
 % set body 2 inertia
 J = zeros(3); 
 J(1,1) = mass/12*(width^2+width^2);
-J(2,2) = mass/12*(length^2+width^2);
-J(3,3) = mass/12*(length^2+width^2);
+J(2,2) = mass/12*(Length^2+width^2);
+J(3,3) = mass/12*(Length^2+width^2);
 sys.body{2}.setInertia(J);
 
 
@@ -73,58 +73,41 @@ fdot = @(t)((pi*sin(2*t)*sin((pi*cos(2*t))/4 - pi/2))/2);%((pi*sin(2*t)*sin((pi*
 fddot = @(t)(pi*cos(2*t)*sin((pi*cos(2*t))/4 - pi/2) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4 - pi/2))/4);%(pi*cos(2*t)*sin((pi*cos(2*t))/4) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4))/4);
 sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,4,f,fdot,fddot,t) % unit length vectors
 
-% EULER PARAMETER NORMALIZATION CONSTRAINTS
-sys.addConstraint('p_norm')
 
 %% ASSEMBLE CONSTRAINT MATRIX 
 sys.assembleConstraints()
 
+%% ADD FORCES
+sys.addGravityForces();
+
 %% INVERSE DYNAMICS ANALYSIS
 timeStart = 0; %seconds
 timeEnd = 10;
-timeStep = 10^-3;
+timeStep = 10^-2; %10^-3;
 
-state = sys.inverseDynamicsAnalysis(timeStart,timeEnd,timeStep);
+%state = sys.inverseDynamicsAnalysis(timeStart,timeEnd,timeStep);
 %save('state_A7.mat','state')
-
-
-sys.inverseDynamicsAnalysis(state)
+load('state_A7_quick.mat')
 
 
 
 
-%% PLOT KINEMATICS
-% 
-% time = timeStart:timeStep:timeEnd;
-% 
-% % kinematics for pendulum, the Oprime frame
-% rOprime = zeros(length(state),3); % preallocate for speed
-% rdotOprime = zeros(length(state),3);
-% rddotOprime = zeros(length(state),3);
-% for i = 1:length(state)
-%     rOprime(i,1) = state{i}.q(1); % x value of rOprime
-%     rOprime(i,2) = state{i}.q(2); % y value of rOprime
-%     rOprime(i,3) = state{i}.q(3); % z value of rOprime
-%     rdotOprime(i,1) = state{i}.qdot(1); % xdot value of rOprime
-%     rdotOprime(i,2) = state{i}.qdot(2); % ydot value of rOprime
-%     rdotOprime(i,3) = state{i}.qdot(3); % zdot value of rOprime
-%     rddotOprime(i,1) = state{i}.qddot(1); % xddot value of rOprime
-%     rddotOprime(i,2) = state{i}.qddot(2); % yddot value of rOprime
-%     rddotOprime(i,3) = state{i}.qddot(3); % zddot value of rOprime
-% end
-% 
-% % plot position, velocity, acceleration of Oprime
-% figure 
-% subplot(3,1,1)
-% hold on
-% plot(time,rOprime(:,1))
-% plot(time,rOprime(:,2))
-% plot(time,rOprime(:,3))
-% title('Position of point O-prime')
-% xlabel('Time (sec)')
-% ylabel('Position (m)')
-% legend('X','Y','Z')
-% hold off
+%% PLOT REACTION TORQUE
+
+time = timeStart:timeStep:timeEnd;
+ 
+% reaction torque for pendulum
+torque = zeros(length(state),1); % preallocate for speed
+for i = 1:length(state)
+    torque(i) = state{i}.rTorque{1}(3);
+end
+
+% plot reaction torque
+figure 
+plot(time,torque)
+title('Reaction Torque of Pendulum')
+xlabel('Time (sec)')
+ylabel('Torque (N-m)')
 % 
 % subplot(3,1,2)
 % hold on

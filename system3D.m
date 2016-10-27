@@ -13,45 +13,71 @@ classdef system3D < handle
         p = [1;0;0;0];  % Global Euler Parameters
         body;           % collection of bodies in the system, inlcuding ground bodies
         cons;           % collection of constraints in the system
-        q;              % q = [r;p] vector, generalized coordinates of ungrounded bodies
+        q;              % q = [r;p] vector, generalized coordinates of ungrounded (free) bodies
         qdot;           % time derivaite of q vector
         qddot;          % 2nd time derivaite of q vector
-        phi;            % full constraint matrix
-        phi_q;          % jacobian of phi
+        phiF;           % full constraint matrix phiF = [phi; phiP]
+        phiF_q;         % jacobian of phiF
+        nuF;            % RHS of velocity equation
+        gammaHatF;      % RHS of acceleration equation, in r-p formulation
+        phi;            % set of kinematic and driving constraints
         phi_r;          % jacobian of phi, with respect to r only
         phi_p;          % jacobian of phi, with respect to p only
-        nu;             % RHS of velocity equation
-        gammaHat;       % RHS of acceleration equation, in r-p formulation
+        phiP;           % set of Euler Parameter Normalization constraints
+        M;              % M matrix for Equations of Motion (masses)
+        P;              % P matrix for Equations of Motion (euler parameters)
+        Jp;             % J^p matrix for Equations of Motion (inertias)
+        F;              % F vector used in Equations of Motion (forces)
+        TauHat;         % TauHat vector used in Equations of Motion (torques)
+        lambda;         % lagrange multipliers of the system, by constraints
+        rForce;         % reaction forces for each body in system
+        rTorque;        % reaction torques for each body in system
+        g;              % vector of acceleration due to gravity
         time;           % current time within the system
     end
     
     properties (Dependent)
         bodyIDs;            % ID numbers of ungrounded bodies in the system
         nBodies;            % number of bodies in the system
-        nGrounds;           % number of grounded bodies in the system
+        nGroundBodies;      % number of grounded bodies in the system
+        nFreeBodies;        % number of free bodies in the system (ungrounded)
         nGenCoordinates;    % number of generalized coordinates in system
         nConstraints;       % number of constraints in the system
         nConstrainedDOF;    % number of degrees of freedom that have been constrained
         nDOF;               % number of Degrees Of Freedom of the system
+        nForceTorque;       % count number of forces/torques applied to bodies
     end
     
     methods (Access = public)
         function sys = system3D() %constructor function
             sys.body = {}; % no bodies defined yet
             sys.cons = {}; % no constraints defined yet
-            
-            % empty for now, construct with assembleConstraints function:
+                        
+            % empty for now, constructed later as needed
+            sys.q = [];
+            sys.qdot = [];
+            sys.qddot = [];
+            sys.phiF = [];
+            sys.phiF_q = [];
+            sys.nuF = [];
+            sys.gammaHatF = [];
             sys.phi = []; 
-            sys.phi_q = [];
             sys.phi_r = [];
             sys.phi_p = [];
-            sys.nu = [];
-            sys.gammaHat = [];
-            sys.time = [];
+            sys.phiP = [];
+            sys.M = [];
+            sys.P = [];
+            sys.F = [];
+            sys.lambda = [];
+            sys.rForce = [];
+            sys.rTorque= [];
+            sys.setSystemTime(0);
+            sys.g = [0;0;-9.81]; % default gravity is pointed -z direction
         end
         function addBody(sys,varargin) % add a body to the system
             ID = sys.nBodies+1; %body ID number
             sys.body{ID} = body3D(ID,varargin{:}); % new instance of the body class
+            sys.body{ID}.setAccelerationOfGravity(sys.g);
         end
         function addConstraint(sys,constraintName,varargin) % add kinematic constraint to the system            
             ID = sys.nConstraints+1; %constraint ID number
@@ -72,24 +98,18 @@ classdef system3D < handle
                     sys.cons{ID} = constraint.sj(varargin{:}); % new instance of constraint.sj class
                 case 'rj'
                     sys.cons{ID} = constraint.rj(varargin{:}); % new instance of constraint.rj class
-                case 'p_norm'
-                    % add p_norm constraint for every body in system (except ground)
-                    for i = 1:sys.nBodies
-                        if ~sys.body{i}.isGround
-                            sys.cons{ID} = constraint.p_norm(sys.body{i}); % new instance of constraint.p_norm class
-                            ID = ID+1;
-                        end
-                    end
                 otherwise
                     error('Constraint not implemented yet.');
             end
         end
         function assembleConstraints(sys) % construct phi matrices 
-            sys.constructPhi();   % construct phi matrix
-            sys.constructPhi_q(); % construct phi_q matrix
-            sys.constructNu();    % construct RHS of velocity equation
-            sys.constructGammaHat();%construct RHS of acceleration equation
+            sys.addEulerParamConstraints(); % add euler parameter normalization constraints to system
+            sys.constructPhiF();   % construct phiF matrix
+            sys.constructPhiF_q();   % construct phiF_q matrix
+            sys.constructNuF();    % construct RHS of velocity equation
+            sys.constructGammaHatF();%construct RHS of acceleration equation
             sys.constructQ();     % construct q (r and p) of bodies in system
+            sys.constructPhi_q(); % construct phi_r & phi_p 
         end
         function state = kinematicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform kinematics analysis
             % perform kinematics analysis on the system. System must be
@@ -136,8 +156,13 @@ classdef system3D < handle
                 % solve for accelerations
                 sys.accelerationAnalysis();
                 
-                % store system state
-                state{iT} = sys.getSystemState();
+                % store system state:
+                % return position and orientation information for the
+                % current time step
+                state{iT}.time = sys.time;
+                state{iT}.q = sys.q;
+                state{iT}.qdot = sys.qdot;
+                state{iT}.qddot = sys.qddot;
                 
                 disp(['Kinematics analysis completed for t = ' num2str(t) ' sec.']);
             end
@@ -146,6 +171,9 @@ classdef system3D < handle
             % inverse dynamics: specify motion of the mechanical system,
             % and we find the set of forces/torques that were actually
             % applied to the mechanical system to lead to this motion.
+            % 
+            % We will follow the 3 steps listed on ME751_f2016 slide 8 of
+            % lecture 10/10/16
             % 
             % System must be fully constrained (nDOF = 0).
             %
@@ -177,7 +205,11 @@ classdef system3D < handle
             
             state = cell(length(timeGrid),1); % preallocate for saved state
             
-            % iterate throughout the time grid
+            
+            % update constant Matrices needed:
+            sys.constructMMatrix(); % update M 
+            
+            % iterate throughout the time grid:
             for iT = 1:length(timeGrid)
                 t = timeGrid(iT); % current time step
                 sys.setSystemTime(t); % set system time
@@ -187,7 +219,7 @@ classdef system3D < handle
                 
                 % solve for positions
                 if t ~= timeStart % except at initial conditions                  
-                    sys.positionAnalysis(tolerance,maxIterations)
+                    sys.positionAnalysis()
                 end
                
                 % solve for velocities
@@ -199,81 +231,127 @@ classdef system3D < handle
                 %%%%%%%%%%
                 % STEP TWO: Solve for the Lagrange multipliers (lambda)
                 
+                sys.constructPhi_q();    % update phi_r & phi_p
+                sys.constructPMatrix();  % update P
+                sys.constructMMatrix();  % update M
+                sys.constructJpMatrix(); % update J^p         
+                sys.constructFVector();  % update F
+                sys.constructTauHatVector();  % update TauHat
+                rddot = sys.qddot(1:3*(sys.nFreeBodies)); % pull accelerations
+                pddot = sys.qddot(3*(sys.nFreeBodies)+1:end);
+                
                 % write the equations of motion for r-p formuation (slide 28 of
                 % ME751_f2016 lecture 10/05/16) in a form for Inv. Dyn., like
                 % is done on slide 8 of ME751_f2016 lecture 10/10/16.
-                % Thus, the lagrange matrix becomes:
+                % Thus, the Left hand side (LHS) matrix becomes:
                 %   [phi_r' zeros(3*nb,nb);
                 %    phi_p'        P'      ]
                 % this is also seen on slide 12 of ME751_f2016 lecture 10/10/16.
-                lagrangeMatrix = [sys.phi_r' zeros(3*sys.nBodies,sys.nBodies);
-                                  sys.phi_p'  0]; %%%%%%%%%% fix this
-                    
-                %    lambda = invDynMatrix\invDynRHS;
-                    
-                    
-
+                LHS = [sys.phi_r' zeros(3*sys.nFreeBodies,sys.nFreeBodies);
+                       sys.phi_p' sys.P']; % build LHS matrix
                 
+                % the right hand side (RHS) matrix is takes the form:
+                %   -[  M*rddot - F;
+                %     J^p*pddot - TauHat]
+                RHS = -[sys.M*rddot - sys.F; 
+                        sys.Jp*pddot - sys.TauHat]; 
+                
+                % solve for lagrange multipliers
+                lambdaVector = LHS\RHS;
+                sys.lambda  = lambdaVector(1:7*sys.nFreeBodies);
+                lambdaP = lambdaVector(7*sys.nFreeBodies+1:end); 
+                                    
+                %%%%%%%%%%
                 % STEP THREE: recover the reaction forces and/or torques that
-                % should act on each body so taht the system experiences the
+                % should act on each body so that the system experiences the
                 % motion you prescribed.
+                sys.calculateReactions(); % in sys.rForce, sys.rTorque
                 
-                % store system state
-                %   state: position and orientation information (q) for all
-                %          points in time across a time grid
-                %          i.e.
-                %          state = [pointInTime,sys.q,sys.qdot,sys.qddot]
-                %
+                % store system state:
+                % return position and orientation information for the
+                % current time step
+                state{iT}.time = sys.time;
+                state{iT}.q = sys.q;
+                state{iT}.qdot = sys.qdot;
+                state{iT}.qddot = sys.qddot;
+                state{iT}.rForce = sys.rForce;
+                state{iT}.rTorque = sys.rTorque;
 
-                %state{iT} = sys.getSystemState();
-                
-                %disp(['Kinematics analysis completed for t = ' num2str(t) ' sec.']);
+                disp(['Inverse dynamics analysis completed for t = ' num2str(t) ' sec.']);
             end
-            
+        end
+        function addGravityForces(sys) % add gravity force to body
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = bodyID
+                sys.body{i}.addForceOfGravity(); % add gravity force to body
+            end
         end
         function plot(sys,varargin) % plots the bodies in the system
             % wrapper to plot functions
             plot.plotSystem(sys,varargin{:});
         end
     end
-    methods (Access = private)
-        function constructPhi(sys) % construct phiF matrix (full constraint matrix)
-            % phi = [nConstrainedDOF x 1]
-            sys.phi = zeros(sys.nConstrainedDOF,1); % initialize phi for speed
+    methods (Access = public)
+        function addEulerParamConstraints(sys) % add euler parameter normalization constraints
+            % add p_norm constraint for every body in system (except ground)
+            % (remove 1 DOF for every ungrounded body in the system)
+            ID = sys.nConstraints+1; %constraint ID number
+            for i = 1:sys.nBodies
+                if ~sys.body{i}.isGround
+                    sys.cons{ID} = constraint.p_norm(sys.body{i}); % new instance of constraint.p_norm class
+                    ID = ID+1;
+                end
+            end
+        end
+        function constructPhi(sys) % construct phi matrix (kinematic & driving constraints)
+            % phi = [(nConstrainedDOF-nFreeBodies) x 1]
+            
+            sys.phi = zeros(sys.nConstrainedDOF-sys.nFreeBodies,1); % initialize phi for speed
             row = 1;
-            for i = 1:sys.nConstraints
+            for i = 1:(sys.nConstraints-sys.nFreeBodies) % only kinematic and driving constraints
                 row_new = row + sys.cons{i}.rDOF - 1;
                 sys.phi(row:row_new)  =  sys.cons{i}.phi; % plug in constraint phi's
                 row = row_new + 1;
             end
         end
+        function constructPhiP(sys) % construct phiP matrix (euler parameter constraints)
+            % phiP = [nFreeBodies x 1]
+            sys.phiP = zeros(sys.nFreeBodies,1); % initialize phiP for speed
+            consNum = sys.nConstraints-sys.nFreeBodies+1;
+            for i = 1:sys.nFreeBodies % only euler parameter constraints
+                sys.phiP(i) = sys.cons{consNum}.phi; % plug in constraint phi's
+                consNum = consNum+1;
+            end
+        end
+        function constructPhiF(sys) % construct phiF matrix (full constraint matrix)
+            % phiF = [nConstrainedDOF x 1]
+            sys.constructPhi();
+            sys.constructPhiP();
+            sys.phiF = [sys.phi; sys.phiP];
+        end
         function constructPhi_q(sys) % construct jacobian of phi
             % phi_q = partial derivative of sys.phi with respect to the
             % generalized coordinates
-            % phi_q = [nConstrainedDOF x nGenCoordinates]
+            % phi_q = [(nConstrainedDOF-nFreeBodies) x nGenCoordinates]
             % phi_q = [phi_r phi_q];
             %
             % For every constraint, pull phi_r and phi_p, then insert into
             % correct location for the jacobian. This location depends on
-            % the number of bodies in the system. Grounded bodies not included. 
+            % the number of bodies in the system. Grounded bodies not included.
             % Takes the form:
             %   [phi_r(body1) ... phi_r(body_last) | phi_p(body1) ... phi_p(body_last)]
             
-            phi_r = zeros(sys.nConstrainedDOF,3*(sys.nBodies-sys.nGrounds)); % initialize phi_r for speed
-            phi_p = zeros(sys.nConstrainedDOF,4*(sys.nBodies-sys.nGrounds)); % initialize phi_p for speed
+            phi_r = zeros(sys.nConstrainedDOF,3*sys.nFreeBodies); % initialize phi_r for speed
+            phi_p = zeros(sys.nConstrainedDOF,4*sys.nFreeBodies); % initialize phi_p for speed
             
-            % get ID's of bodies that are not grounded
+            % get ID's of bodies that are not grounded (free bodies)
             bodyID = sys.bodyIDs;
             
             % loop through constraints
             row = 1; %counter
-            for i = 1:sys.nConstraints
+            for i = 1:(sys.nConstraints-sys.nFreeBodies) % only kinematic and driving constraints
                 row_new = row + sys.cons{i}.rDOF - 1;
-                if strcmp(class(sys.cons{i}),'constraint.p_norm') % if euler parameter normalization constraint
-                    col = find(bodyID == sys.cons{i}.bodyi.ID); % get column position
-                    phi_r(row,(3*col - 2):(3*col)) = sys.cons{i}.phi_r; % place in row
-                    phi_p(row,(4*col - 3):(4*col)) = sys.cons{i}.phi_p;
-                elseif ~sys.cons{i}.bodyi.isGround % if bodyi is not ground....
+                if ~sys.cons{i}.bodyi.isGround % if bodyi is not ground....
                     coli = find(bodyID == sys.cons{i}.bodyi.ID); % get body i column position
                     phi_r(row:row_new,(3*coli - 2):(3*coli)) = sys.cons{i}.phi_r(1:sys.cons{i}.rDOF,1:3); % place in row
                     phi_p(row:row_new,(4*coli - 3):(4*coli)) = sys.cons{i}.phi_p(1:sys.cons{i}.rDOF,1:4);
@@ -293,25 +371,70 @@ classdef system3D < handle
             % create phi_q
             sys.phi_r = phi_r;
             sys.phi_p = phi_p;
-            sys.phi_q = [phi_r phi_p];
         end
-        function constructNu(sys) % construct nu, RHS Of velocity equation
-            % nu = [nConstrainedDOF x 1]
-            sys.nu = zeros(sys.nConstrainedDOF,1); % initialize nu for speed
+        function constructPhiF_q(sys) % construct jacobian of phiF
+            % phiF_q = partial derivative of sys.phiF with respect to the
+            % generalized coordinates
+            % phiF_q = [nConstrainedDOF x nGenCoordinates]
+            % phiF_q = [phiF_r phiF_q];
+            %
+            % For every constraint, pull phi_r and phi_p, then insert into
+            % correct location for the jacobian. This location depends on
+            % the number of bodies in the system. Grounded bodies not included. 
+            % Takes the form:
+            %   [phi_r(body1) ... phi_r(body_last) | phi_p(body1) ... phi_p(body_last)]
+            
+            phiF_r = zeros(sys.nConstrainedDOF,3*sys.nFreeBodies); % initialize phiF_r for speed
+            phiF_p = zeros(sys.nConstrainedDOF,4*sys.nFreeBodies); % initialize phiF_p for speed
+            
+            % get ID's of bodies that are not grounded (free bodies)
+            bodyID = sys.bodyIDs;
+            
+            % loop through constraints
+            row = 1; %counter
+            for i = 1:sys.nConstraints
+                row_new = row + sys.cons{i}.rDOF - 1;
+                if strcmp(class(sys.cons{i}),'constraint.p_norm') % if euler parameter normalization constraint
+                    col = find(bodyID == sys.cons{i}.bodyi.ID); % get column position
+                    phiF_r(row,(3*col - 2):(3*col)) = sys.cons{i}.phi_r; % place in row
+                    phiF_p(row,(4*col - 3):(4*col)) = sys.cons{i}.phi_p;
+                elseif ~sys.cons{i}.bodyi.isGround % if bodyi is not ground....
+                    coli = find(bodyID == sys.cons{i}.bodyi.ID); % get body i column position
+                    phiF_r(row:row_new,(3*coli - 2):(3*coli)) = sys.cons{i}.phi_r(1:sys.cons{i}.rDOF,1:3); % place in row
+                    phiF_p(row:row_new,(4*coli - 3):(4*coli)) = sys.cons{i}.phi_p(1:sys.cons{i}.rDOF,1:4);
+                    if ~sys.cons{i}.bodyj.isGround % and if body j is not ground
+                        colj = find(bodyID == sys.cons{i}.bodyj.ID); % get body j column position
+                        phiF_r(row:row_new,(3*colj - 2):(3*colj)) = sys.cons{i}.phi_r(1:sys.cons{i}.rDOF,4:6); % place in row
+                        phiF_p(row:row_new,(4*colj - 3):(4*colj)) = sys.cons{i}.phi_p(1:sys.cons{i}.rDOF,5:8);
+                    end
+                elseif sys.cons{i}.bodyi.isGround % if bodyi is ground....
+                    colj = find(bodyID == sys.cons{i}.bodyj.ID); % get body j column position
+                    phiF_r(row:row_new,(3*colj - 2):(3*colj)) = sys.cons{i}.phi_r(1:sys.cons{i}.rDOF,1:3); % place in row
+                    phiF_p(row:row_new,(4*colj - 3):(4*colj)) = sys.cons{i}.phi_p(1:sys.cons{i}.rDOF,1:4);
+                end
+                row = row_new + 1; % increment row counter
+            end
+            
+            % create phiF_q
+            sys.phiF_q = [phiF_r phiF_p];
+        end
+        function constructNuF(sys) % construct nuF, RHS Of velocity equation
+            % nuF = [nConstrainedDOF x 1]
+            sys.nuF = zeros(sys.nConstrainedDOF,1); % initialize nuF for speed
             row = 1;
             for i = 1:sys.nConstraints
                 row_new = row + sys.cons{i}.rDOF - 1;
-                sys.nu(row:row_new)  =  sys.cons{i}.nu; % plug in constraint nu's
+                sys.nuF(row:row_new)  =  sys.cons{i}.nu; % plug in constraint nu's
                 row = row_new + 1;
             end
         end
-        function constructGammaHat(sys) % construct gammaHat, RHS Of acceleration equation, in r-p formulation
-            % gammaHat = [nConstrainedDOF x 1]
-            sys.gammaHat = zeros(sys.nConstrainedDOF,1); % initialize nu for speed
+        function constructGammaHatF(sys) % construct gammaHatF, RHS Of acceleration equation, in r-p formulation
+            % gammaHatF = [nConstrainedDOF x 1]
+            sys.gammaHatF = zeros(sys.nConstrainedDOF,1); % initialize nuF for speed
             row = 1;
             for i = 1:sys.nConstraints
                 row_new = row + sys.cons{i}.rDOF - 1;
-                sys.gammaHat(row:row_new)  =  sys.cons{i}.gammaHat; % plug in constraint gammaHats's
+                sys.gammaHatF(row:row_new)  =  sys.cons{i}.gammaHat; % plug in constraint gammaHats's
                 row = row_new + 1;
             end
         end
@@ -320,8 +443,8 @@ classdef system3D < handle
             bodyID = sys.bodyIDs;
             
             % initialize for speed
-            r = zeros(3*length(bodyID),1);
-            p = zeros(4*length(bodyID),1);
+            r = zeros(3*sys.nFreeBodies,1);
+            p = zeros(4*sys.nFreeBodies,1);
             
             % pull r and p out of ungrounded bodies
             rowr = 1; % r count
@@ -341,16 +464,16 @@ classdef system3D < handle
             if ~exist('tolerance','var') || isempty(tolerance)
                 tolerance = 1e-9;  % default tolerance
             end
-            if ~exist('tolerance','var') || isempty(tolerance)
+            if ~exist('maxIterations','var') || isempty(maxIterations)
                 maxIterations = 50; % default maximum iterations
             end
              
             guessQ = sys.q; % initial guess
             
             for i = 1:maxIterations % iterate
-                sys.constructPhi();   % get constraint matrix
-                sys.constructPhi_q(); % get jacobian
-                correction = sys.phi_q\sys.phi; % correction 
+                sys.constructPhiF();   % get constraint matrix
+                sys.constructPhiF_q(); % get jacobian
+                correction = sys.phiF_q\sys.phiF; % correction 
                 guessQ = guessQ - correction; % update guess
                 
                 % update bodies
@@ -370,13 +493,13 @@ classdef system3D < handle
             % for a given time (t)
             
             % calculate RHS of velocity equation
-            sys.constructNu();
+            sys.constructNuF();
             
             % find jacobian of phi
-            sys.constructPhi_q();
+            sys.constructPhiF_q();
             
             % solve for velocities (qdot)
-            qdot = sys.phi_q\sys.nu;
+            qdot = sys.phiF_q\sys.nuF;
             
             % update bodies
             sys.updateSystem([],qdot,[]);
@@ -386,22 +509,109 @@ classdef system3D < handle
             % for a given time (t)
             
             % calculate RHS of acceleration equation
-            sys.constructGammaHat();
+            sys.constructGammaHatF();
             
             % already found jacobian of phi
             
             % solve for accelerations (qddot)
-            qddot = sys.phi_q\sys.gammaHat;
+            qddot = sys.phiF_q\sys.gammaHatF;
             
             % update bodies
             sys.updateSystem([],[],qddot);
+        end
+        function constructPMatrix(sys) % construct the P matrix used in EOM
+            % from ME751_f2016 slide 27 of lecture 10/05/16
+            sys.P = zeros(sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = 1:sys.nFreeBodies
+               sys.P(i,(4*i-3):4*i) = sys.body{bodyID(i)}.p'; % plug in p vector transposed
+            end  
+        end
+        function constructMMatrix(sys) % construct the P matrix used in EOM
+            % from ME751_f2016 slide 27 of lecture 10/05/16
+            sys.M = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies); % preallocate for speed
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = 1:sys.nFreeBodies
+               sys.M((3*i-2):3*i,(3*i-2):3*i) = sys.body{bodyID(i)}.m*eye(3); % plug in mass matrices
+            end  
+        end
+        function constructJpMatrix(sys) % construct the J^P matrix used in EOM
+            % from ME751_f2016 slide 27 of lecture 10/05/16
+            sys.Jp = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = 1:sys.nFreeBodies
+                 J = sys.body{bodyID(i)}.Jbar; % pull inertia tensor
+                 G = utility.Gmatrix(sys.body{bodyID(i)}.p); % calc G matrix
+                 sys.Jp((4*i-3):4*i,(4*i-3):4*i) = 4*G'*J*G; % plug in J^p terms
+            end  
+        end
+        function constructFVector(sys) % construct F vector used in EOM
+            % from ME751_f2016 slide 26 from lecture 10/05/16:
+            % F = F^m + F^a
+            % from ME751_f2016 slide 29 from lecture 10/03/16:
+            %   F^m : mass distributed forces (usually = mg)
+            % from ME751_f2016 slide 27 from lecture 10/03/16:
+            %   F^a : active forces
+            
+            % from ME751_f2016 slide 27 of lecture 10/05/16:
+            sys.F = zeros(3*sys.nFreeBodies,1); % preallocate for speed
+            
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = 1:sys.nFreeBodies % iterate through every free body
+                F = zeros(3,1);
+                for j = 1:sys.body{bodyID(i)}.nForceTorque
+                    F = F + sys.body{bodyID(i)}.forces{j}.force; % sum active and gravitational forces acting on that body
+                end
+                sys.F((3*i-2):3*i) = F;
+            end
+        end
+        function constructTauHatVector(sys) % construct TauHat vector used in EOM
+            % from ME751_f2016 slide 27 of lecture 10/05/16:
+            sys.TauHat = zeros(4*sys.nFreeBodies,1); % preallocate for speed
+            
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = 1:sys.nFreeBodies % iterate through every free body
+                nBar = zeros(3,1);
+                for j = 1:sys.body{bodyID(i)}.nForceTorque
+                    sys.body{bodyID(i)}.updateForces(); % make sure force torques are accurate relative to body orientation
+                    nBar = nBar + sys.body{bodyID(i)}.forces{j}.torque; % sum active and gravitational torques acting on that body
+                end
+                
+                % TauHat constructed using formula from ME751_f2016 slide 26 from lecture 10/05/16
+                J = sys.body{bodyID(i)}.Jbar; % pull inertia tensor
+                G = utility.Gmatrix(sys.body{bodyID(i)}.p); % calc G matrix
+                Gdot = utility.Gmatrix(sys.body{bodyID(i)}.pdot); % calc Gdot matrix
+                P = sys.body{bodyID(i)}.p; % pull euler parameters
+                TauHat = 2*G'*nBar + 8*Gdot'*J*Gdot*P;
+                sys.TauHat((4*i-3):4*i) = TauHat;
+            end
+        end
+        function calculateReactions(sys)
+            % From ME751_f2016 slide 8 of lecture 10/10/16
+            sys.rForce = cell(sys.nFreeBodies,1); % preallocate for speed
+            sys.rTorque = cell(sys.nFreeBodies,1); % preallocate for speed
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = 1:sys.nFreeBodies
+                % Reaction Forces
+                phi_r_i = sys.phi_r(:,(3*i-2):3*i); % pull phi_r related to body i
+                sys.rForce{i} = -phi_r_i'*sys.lambda; % calc reaction forces for this body
+                
+                % Reaction Torques
+                phi_p_i = sys.phi_p(:,(4*i-3):4*i); % pull phi_p related to body i
+                % calc reaction torques for this body as:
+                % nBar_r = -phi_p_i'*sys.lambda
+                % but nBar_r is [4x1], need to convert to r-omega
+                % formulation:
+                G = utility.Gmatrix(sys.body{bodyID(i)}.p); % calc G matrix
+                sys.rTorque{i} = 0.5*G*-phi_p_i'*sys.lambda;
+            end
         end
         function updateSystem(sys,q,qdot,qddot) %update r,p,and derivatives for each body in system
             %%% update q (r and p)
             if ~isempty(q)
                 sys.q = q;
-                r = q(1:3*(sys.nBodies-sys.nGrounds));
-                p = q(3*(sys.nBodies-sys.nGrounds)+1:end);
+                r = q(1:3*(sys.nFreeBodies));
+                p = q(3*(sys.nFreeBodies)+1:end);
                 
                 rowr = 1;
                 rowp = 1;
@@ -416,8 +626,8 @@ classdef system3D < handle
             %%% update qdot (rdot and pdot)
             if ~isempty(qdot)
                 sys.qdot = qdot;
-                rdot = qdot(1:3*(sys.nBodies-sys.nGrounds));
-                pdot = qdot(3*(sys.nBodies-sys.nGrounds)+1:end);
+                rdot = qdot(1:3*(sys.nFreeBodies));
+                pdot = qdot(3*(sys.nFreeBodies)+1:end);
                 
                 rowr = 1;
                 rowp = 1;
@@ -432,8 +642,8 @@ classdef system3D < handle
             %%% update qddot (rddot and pddot)
             if ~isempty(qddot)
                 sys.qddot = qddot;
-                rddot = qddot(1:3*(sys.nBodies-sys.nGrounds));
-                pddot = qddot(3*(sys.nBodies-sys.nGrounds)+1:end);
+                rddot = qddot(1:3*(sys.nFreeBodies));
+                pddot = qddot(3*(sys.nFreeBodies)+1:end);
                 
                 rowr = 1;
                 rowp = 1;
@@ -453,18 +663,10 @@ classdef system3D < handle
                 sys.cons{i}.t = t;
             end
         end
-        function currentState = getSystemState(sys) 
-            % return position and orientation information for the current
-            % time step
-            currentState.time = sys.time;
-            currentState.q = sys.q;
-            currentState.qdot = sys.qdot;
-            currentState.qddot = sys.qddot;
-        end
     end
     methods % methods block with no attributes
-        function bodyIDs = get.bodyIDs(sys) % calculate ID numbers of ungrounded bodies in the system
-            bodyIDs = zeros([sys.nBodies-sys.nGrounds],1); %initialize size
+        function bodyIDs = get.bodyIDs(sys) % calculate ID numbers of free bodies in the system
+            bodyIDs = zeros(sys.nFreeBodies,1); %initialize size
             j = 1; % counter 
             for i = 1:sys.nBodies
                 if ~sys.body{i}.isGround
@@ -473,22 +675,25 @@ classdef system3D < handle
                 end
             end
         end
-        function nBodies = get.nBodies(sys) % calculate number of bodies in system
+        function nBodies = get.nBodies(sys) % calculate total number of bodies in system
             nBodies = length(sys.body);
         end
-        function nGrounds = get.nGrounds(sys) % calculate number of grounded bodies in system
-            nGrounds = 0;
+        function nGroundBodies = get.nGroundBodies(sys) % calculate number of grounded bodies in system
+            nGroundBodies = 0;
             if sys.nBodies>0
                 for i = 1:sys.nBodies
                     if sys.body{i}.isGround
-                        nGrounds = nGrounds + 1;
+                        nGroundBodies = nGroundBodies + 1;
                     end
                 end
             end
         end
+        function nFreeBodies = get.nFreeBodies(sys) % calculate number of free bodies in system
+            nFreeBodies = sys.nBodies-sys.nGroundBodies;
+        end
         function nGenCoordinates = get.nGenCoordinates(sys) % calculate number of generalized coordinates in system
             % 7 DOF available for each body
-            nGenCoordinates = 7*(sys.nBodies-sys.nGrounds);
+            nGenCoordinates = 7*(sys.nFreeBodies);
         end
         function nConstraints = get.nConstraints(sys) % calculate number of constraints in system
             nConstraints = length(sys.cons);
@@ -505,6 +710,13 @@ classdef system3D < handle
                 end
             end
             nDOF = sys.nGenCoordinates - rDOF;
+        end
+        function nForceTorque = get.nForceTorque(sys) % count number of forces/torques applied to bodies
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            nForceTorque = 0;
+            for i = 1:sys.nFreeBodies
+                nForceTorque = nForceTorque + sys.body{bodyID(i)}.nForceTorque;
+            end
         end
     end
 end

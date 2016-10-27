@@ -84,6 +84,16 @@ classdef utility
             B = 2*[(e0*eye(3) + utility.tilde(e))*abar, e*abar'-(e0*eye(3)+utility.tilde(e))*utility.tilde(abar)];
             
         end
+        function G = Gmatrix(p) % G matrix, r-p formulation
+            % from ME751_f2016 slide 15 from lecture 9/21/16
+            % input:
+            %   p = [e0;e1;e2;e3] euler parameters
+            % output:
+            %   G = [3x4] matrix
+            e0 = p(1);
+            e = p(2:4);
+            G = [-e, -utility.tilde(e)+e0*eye(3)];
+        end
         function dij = dij(bodyi,Pi,bodyj,Qj) % vector between points Pi and Qj
             dij = bodyj.r+bodyj.A*bodyj.point{Qj} + -bodyi.r + -bodyi.A*bodyi.point{Pi};
         end
