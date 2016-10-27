@@ -1,10 +1,9 @@
-
-% Filename: simEngine3D_A6P3.m
+% Filename: simEngine3D_A7.m
 % Author:   Samuel Acuña
-% Date:     18 Oct 2016
+% Date:     27 Oct 2016
 %
 % About:    
-% Driver file for the simEngine3D framework, for hw6 . Defines the system, the
+% Driver file for the simEngine3D framework, for hw7 . Defines the system, the
 % bodies in the system, and the constraints in the system.
 
 clear; clc; close all
@@ -85,12 +84,9 @@ timeStart = 0; %seconds
 timeEnd = 10;
 timeStep = 10^-2; %10^-3;
 
-%state = sys.inverseDynamicsAnalysis(timeStart,timeEnd,timeStep);
+state = sys.inverseDynamicsAnalysis(timeStart,timeEnd,timeStep);
 %save('state_A7.mat','state')
-load('state_A7_quick.mat')
-
-
-
+%load('state_A7.mat')
 
 %% PLOT REACTION TORQUE
 
@@ -108,85 +104,5 @@ plot(time,torque)
 title('Reaction Torque of Pendulum')
 xlabel('Time (sec)')
 ylabel('Torque (N-m)')
-% 
-% subplot(3,1,2)
-% hold on
-% plot(time,rdotOprime(:,1))
-% plot(time,rdotOprime(:,2))
-% plot(time,rdotOprime(:,3))
-% title('Velocity of point O-prime')
-% xlabel('Time (sec)')
-% ylabel('Velocity (m/s)')
-% legend('X','Y','Z')
-% hold off
-% 
-% subplot(3,1,3)
-% hold on
-% plot(time,rddotOprime(:,1))
-% plot(time,rddotOprime(:,2))
-% plot(time,rddotOprime(:,3))
-% title('Acceleration of point O-prime')
-% xlabel('Time (sec)')
-% ylabel('Acceleration (m/s^2)')
-% legend('X','Y','Z')
-% hold off
-% 
-% 
-% % derive kinematics of point Q, at the hinge
-% sBar = [-2 0 0]';
-% rQ          = zeros(length(state),3);
-% rQdot       = zeros(length(state),3);
-% rQddot      = zeros(length(state),3);
-% 
-% for i = 1:length(state)
-%     % get pOprime
-%     p     = state{i}.q(4:7); 
-%     pdot  = state{i}.qdot(4:7); 
-%     pddot = state{i}.qddot(4:7); 
-%     
-%     % derive rQ
-%     A = utility.p2A(p);
-%     B = utility.Bmatrix(p,sBar);
-%     Bdot = utility.Bmatrix(pdot,sBar);
-%     rQ(i,:) = rOprime(i,:)' + A*sBar;
-%     rQdot(i,:) = rdotOprime(i,:)' + B*pdot;
-%     rQddot(i,:) = rddotOprime(i,:)' + B*pddot + Bdot*pdot;
-% end
-% 
-% % plot position, velocity, acceleration of point Q
-% figure
-% subplot(3,1,1)
-% hold on
-% plot(time,rQ(:,1))
-% plot(time,rQ(:,2))
-% plot(time,rQ(:,3))
-% title('Position of point Q')
-% xlabel('Time (sec)')
-% ylabel('Position (m)')
-% legend('X','Y','Z')
-% hold off
-% 
-% subplot(3,1,2)
-% hold on
-% plot(time,rQdot(:,1))
-% plot(time,rQdot(:,2))
-% plot(time,rQdot(:,3))
-% title('Velocity of point Q')
-% xlabel('Time (sec)')
-% ylabel('Velocity (m/s)')
-% legend('X','Y','Z')
-% hold off
-% 
-% subplot(3,1,3)
-% hold on
-% plot(time,rQddot(:,1))
-% plot(time,rQddot(:,2))
-% plot(time,rQddot(:,3))
-% title('Acceleration of point Q')
-% xlabel('Time (sec)')
-% ylabel('Acceleration (m/s^2)')
-% legend('X','Y','Z')
-% hold off
-% 
-% 
+
 
