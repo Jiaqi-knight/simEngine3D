@@ -44,6 +44,8 @@ classdef system3D < handle
         nGenCoordinates;    % number of generalized coordinates in system
         nConstraints;       % number of constraints in the system
         nConstrainedDOF;    % number of degrees of freedom that have been constrained
+        rKDOF;              % number of degrees of freedom removed by kinematic and driving constraints
+        rPDOF;              % number of degrees of freedom removed by euler parameter normalization constraints
         nDOF;               % number of Degrees Of Freedom of the system
         nForceTorque;       % count number of forces/torques applied to bodies
     end
@@ -190,10 +192,10 @@ classdef system3D < handle
             %   state{1}.time
             %   state{1}.q 
             %   state{1}.qdot
-            %   state{1}.qddot 
-            
-            % ADD MORE STATE VALUES!!! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            
+            %   state{1}.qddot
+            %   state{1}.rForce
+            %   state{1}.rTorque
+                        
             if sys.nDOF >0
                 error('For inverse dynamics analysis, the total number of degrees of freedom must be zero.');
             end
@@ -258,9 +260,10 @@ classdef system3D < handle
                 
                 % solve for lagrange multipliers
                 lambdaVector = LHS\RHS;
-                sys.lambda  = lambdaVector(1:7*sys.nFreeBodies);
-                lambdaP = lambdaVector(7*sys.nFreeBodies+1:end); 
-                                    
+                sys.lambda  = lambdaVector(1:sys.rKDOF*sys.nFreeBodies);
+                lambdaP = lambdaVector(sys.rKDOF*sys.nFreeBodies+1:end); % not sure if I need to use this later. 
+
+                                
                 %%%%%%%%%%
                 % STEP THREE: recover the reaction forces and/or torques that
                 % should act on each body so that the system experiences the
@@ -304,21 +307,21 @@ classdef system3D < handle
             end
         end
         function constructPhi(sys) % construct phi matrix (kinematic & driving constraints)
-            % phi = [(nConstrainedDOF-nFreeBodies) x 1]
+            % phi = [(rKDOF) x 1]
             
-            sys.phi = zeros(sys.nConstrainedDOF-sys.nFreeBodies,1); % initialize phi for speed
+            sys.phi = zeros(sys.rKDOF,1); % initialize phi for speed
             row = 1;
-            for i = 1:(sys.nConstraints-sys.nFreeBodies) % only kinematic and driving constraints
+            for i = 1:(sys.nConstraints-sys.rPDOF) % only kinematic and driving constraints
                 row_new = row + sys.cons{i}.rDOF - 1;
                 sys.phi(row:row_new)  =  sys.cons{i}.phi; % plug in constraint phi's
                 row = row_new + 1;
             end
         end
         function constructPhiP(sys) % construct phiP matrix (euler parameter constraints)
-            % phiP = [nFreeBodies x 1]
-            sys.phiP = zeros(sys.nFreeBodies,1); % initialize phiP for speed
-            consNum = sys.nConstraints-sys.nFreeBodies+1;
-            for i = 1:sys.nFreeBodies % only euler parameter constraints
+            % phiP = [rPDOF x 1]
+            sys.phiP = zeros(sys.rPDOF,1); % initialize phiP for speed
+            consNum = sys.nConstraints-sys.rPDOF+1;
+            for i = 1:sys.rPDOF % only euler parameter constraints
                 sys.phiP(i) = sys.cons{consNum}.phi; % plug in constraint phi's
                 consNum = consNum+1;
             end
@@ -332,7 +335,7 @@ classdef system3D < handle
         function constructPhi_q(sys) % construct jacobian of phi
             % phi_q = partial derivative of sys.phi with respect to the
             % generalized coordinates
-            % phi_q = [(nConstrainedDOF-nFreeBodies) x nGenCoordinates]
+            % phi_q = [(rKDOF) x nGenCoordinates]
             % phi_q = [phi_r phi_q];
             %
             % For every constraint, pull phi_r and phi_p, then insert into
@@ -341,15 +344,15 @@ classdef system3D < handle
             % Takes the form:
             %   [phi_r(body1) ... phi_r(body_last) | phi_p(body1) ... phi_p(body_last)]
             
-            phi_r = zeros(sys.nConstrainedDOF,3*sys.nFreeBodies); % initialize phi_r for speed
-            phi_p = zeros(sys.nConstrainedDOF,4*sys.nFreeBodies); % initialize phi_p for speed
+            phi_r = zeros(sys.rKDOF,3*sys.nFreeBodies); % initialize phi_r for speed
+            phi_p = zeros(sys.rKDOF,4*sys.nFreeBodies); % initialize phi_p for speed
             
             % get ID's of bodies that are not grounded (free bodies)
             bodyID = sys.bodyIDs;
             
             % loop through constraints
             row = 1; %counter
-            for i = 1:(sys.nConstraints-sys.nFreeBodies) % only kinematic and driving constraints
+            for i = 1:(sys.nConstraints-sys.rPDOF) % only kinematic and driving constraints
                 row_new = row + sys.cons{i}.rDOF - 1;
                 if ~sys.cons{i}.bodyi.isGround % if bodyi is not ground....
                     coli = find(bodyID == sys.cons{i}.bodyi.ID); % get body i column position
@@ -588,22 +591,37 @@ classdef system3D < handle
         end
         function calculateReactions(sys)
             % From ME751_f2016 slide 8 of lecture 10/10/16
-            sys.rForce = cell(sys.nFreeBodies,1); % preallocate for speed
-            sys.rTorque = cell(sys.nFreeBodies,1); % preallocate for speed
+            sys.rForce = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
+            sys.rTorque = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
             for i = 1:sys.nFreeBodies
                 % Reaction Forces
                 phi_r_i = sys.phi_r(:,(3*i-2):3*i); % pull phi_r related to body i
-                sys.rForce{i} = -phi_r_i'*sys.lambda; % calc reaction forces for this body
+                
+                % total reaction forces for this body given by:
+                % rForceTotal on body i = -phi_r_i'*sys.lambda
+                % However, we want to find reactions forces for each lambda
+                % we are interested in. such that:
+                % rForceTotal on body i = (rForce on body i due to lamba1) + (rForce on body i due to lamba2) + ...
+
+                for j = 1:length(sys.lambda) % look at each row of phi_r_i
+                    sys.rForce{i,j} = -phi_r_i(j,:)'*sys.lambda(j); % reaction force j on body i
+                end
+                
                 
                 % Reaction Torques
                 phi_p_i = sys.phi_p(:,(4*i-3):4*i); % pull phi_p related to body i
-                % calc reaction torques for this body as:
-                % nBar_r = -phi_p_i'*sys.lambda
-                % but nBar_r is [4x1], need to convert to r-omega
-                % formulation:
+                
+                % total reaction torques for this body as:
+                % rTorqueTotal for body i = -phi_p_i'*sys.lambda
+                % However, we want to find reactions torques for each lambda
+                % we are interested in. such that:
+                % rTorqueTotal on body i = (rTorque on body i due to lamba1) + (rTorque on body i due to lamba2) + ...
+                % but rTorque is [4x1], need to convert to r-omega formulation
                 G = utility.Gmatrix(sys.body{bodyID(i)}.p); % calc G matrix
-                sys.rTorque{i} = 0.5*G*-phi_p_i'*sys.lambda;
+                for j = 1:length(sys.lambda) % look at each row of phi_p_i
+                    sys.rTorque{i,j} = 0.5*G*-phi_p_i(j,:)'*sys.lambda(j);
+                end
             end
         end
         function updateSystem(sys,q,qdot,qddot) %update r,p,and derivatives for each body in system
@@ -701,15 +719,28 @@ classdef system3D < handle
         function nConstrainedDOF = get.nConstrainedDOF(sys) % calculate number of degrees of freedom that have been constrained
             nConstrainedDOF = sys.nGenCoordinates - sys.nDOF;
         end
-        function nDOF = get.nDOF(sys) % count number of Degrees of Freedom
-            % number of degrees of freedom removed by constraints
-            rDOF = 0;
+        function rKDOF = get.rKDOF(sys) % number of degrees of freedom removed by kinematic and driving constraints
+            rKDOF = 0;
             if sys.nConstraints>0
                 for i = 1:sys.nConstraints
-                    rDOF = rDOF + sys.cons{i}.rDOF;
+                    if ~strcmp(class(sys.cons{i}),'constraint.p_norm') % dont include euler parameter normalization constraints
+                        rKDOF = rKDOF + sys.cons{i}.rDOF;
+                    end
                 end
             end
-            nDOF = sys.nGenCoordinates - rDOF;
+        end
+        function rPDOF = get.rPDOF(sys) % number of degrees of freedom removed by euler parameter normalization constraints
+            rPDOF = 0;
+            if sys.nConstraints>0
+                for i = 1:sys.nConstraints
+                    if strcmp(class(sys.cons{i}),'constraint.p_norm') % only include euler parameter normalization constraints
+                        rPDOF = rPDOF + sys.cons{i}.rDOF;
+                    end
+                end
+            end
+        end
+        function nDOF = get.nDOF(sys) % count number of Degrees of Freedom
+            nDOF = sys.nGenCoordinates - (sys.rKDOF + sys.rPDOF);
         end
         function nForceTorque = get.nForceTorque(sys) % count number of forces/torques applied to bodies
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)

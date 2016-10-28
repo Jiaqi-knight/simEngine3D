@@ -79,6 +79,7 @@ sys.assembleConstraints()
 %% ADD FORCES
 sys.addGravityForces();
 
+
 %% INVERSE DYNAMICS ANALYSIS
 timeStart = 0; %seconds
 timeEnd = 10;
@@ -94,8 +95,9 @@ time = timeStart:timeStep:timeEnd;
  
 % reaction torque for pendulum
 torque = zeros(length(state),1); % preallocate for speed
+tor = 0;
 for i = 1:length(state)
-    torque(i) = state{i}.rTorque{1}(3);
+    torque(i) = state{i}.rTorque{6}(3);
 end
 
 % plot reaction torque
