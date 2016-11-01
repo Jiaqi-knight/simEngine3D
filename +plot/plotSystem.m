@@ -22,7 +22,7 @@ fig.Color = [1 1 1]; % set background color to white
 
 %% PLOT GLOBAL REFERENCE FRAME
 
-plot.drawframe(sys.r,sys.p,1,1) % plot GLOBAL RF
+plot.drawframe(sys.r_global,sys.p_global,1,1) % plot GLOBAL RF
 xlabel('X');
 ylabel('Y');
 zlabel('Z');

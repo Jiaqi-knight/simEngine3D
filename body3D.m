@@ -29,7 +29,7 @@ classdef body3D < handle
         A; % rotation matrix, an expression of the euler parameters
         nForces; % number of forces/torques applied  
     end
-    methods (Access = private)
+    methods (Access = public)
         function body = body3D(system,ID,bodyType,r,p,rdot,pdot,rddot,pddot) %constructor function
             switch bodyType
                 case 'ground'

@@ -33,16 +33,21 @@ timeGrid = timeStart:timeStep:timeEnd; % establish time grid
 
 state = cell(length(timeGrid),1); % preallocate for saved state
 
-% update constant Matrices needed:
-sys.constructMMatrix(); % update M
-
 % check initial conditions (ME751_f2016, slide 41, lecture 10/17/16)
-% CODE HERE
+sys.checkInitialConditions();
+sys.findInitialAccelerations();
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% START WORK HERE. NEXT STEP, GO THROUGH DYNAMICS FLOW CHARTS. YOU CAN DO IT SAMUEL!
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % iterate throughout the time grid:
 for iT = 1:length(timeGrid)
     t = timeGrid(iT); % current time step
-    sys.setSystemTime(t); % set system time
+    sys.setSystemTime(t); % set system time 
     
     
     disp(['Dynamics analysis completed for t = ' num2str(t) ' sec.']);

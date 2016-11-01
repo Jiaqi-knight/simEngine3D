@@ -9,27 +9,31 @@ classdef system3D < handle
     % estabilishes the global inertial reference frame.
     
     properties
-        r = [0;0;0];    % Global Reference Frame
-        p = [1;0;0;0];  % Global Euler Parameters
+        r_global = [0;0;0];    % Global Reference Frame
+        p_global = [1;0;0;0];  % Global Euler Parameters
         body;           % collection of bodies in the system, inlcuding ground bodies
         cons;           % collection of constraints in the system
         q;              % q = [r;p] vector, generalized coordinates of ungrounded (free) bodies
         qdot;           % time derivaite of q vector
         qddot;          % 2nd time derivaite of q vector
-        phiF;           % full constraint matrix phiF = [phi; phiP]
-        phiF_q;         % jacobian of phiF
-        nuF;            % RHS of velocity equation
-        gammaHatF;      % RHS of acceleration equation, in r-p formulation
         phi;            % set of kinematic and driving constraints
         phi_r;          % jacobian of phi, with respect to r only
         phi_p;          % jacobian of phi, with respect to p only
         phiP;           % set of Euler Parameter Normalization constraints
+        phiF;           % full constraint matrix phiF = [phi; phiP]
+        phiF_q;         % jacobian of phiF
+        nu;             % RHS of velocity equation
+        nuF;            % RHS of Full velocity equation
+        gammaHat;       % RHS of acceleration equation, in r-p formulation
+        gammaHatP;      % RHS of acceleration equation for euler parameter constraints
+        gammaHatF;      % RHS of full acceleration equation
         M;              % M matrix for Equations of Motion (masses)
         P;              % P matrix for Equations of Motion (euler parameters)
         Jp;             % J^p matrix for Equations of Motion (inertias)
         F;              % F vector used in Equations of Motion (forces)
         TauHat;         % TauHat vector used in Equations of Motion (torques)
         lambda;         % lagrange multipliers of the system, by constraints
+        lambdaP;        % lagrange multipliers of the system, from euler parameter constraints
         rForce;         % reaction forces for each body in system
         rTorque;        % reaction torques for each body in system
         g;              % vector of acceleration due to gravity
@@ -37,6 +41,12 @@ classdef system3D < handle
     end
     
     properties (Dependent)
+        r;                  % vector of positions of the bodies
+        rdot;               % vector of velocities of the bodies
+        rddot;              % vector of accelerations of the bodies
+        p;                  % vector of euler parameters of the bodies (rotation)
+        pdot;               % vector of derivative of euler parameters of the bodies (rotational velocity)
+        pddot;              % vector of 2nd derivative of euler parameters of the bodies (rotational acceleration)
         bodyIDs;            % ID numbers of ungrounded bodies in the system
         nBodies;            % number of bodies in the system
         nFreeBodies;        % number of free bodies in the system (ungrounded)
@@ -260,7 +270,7 @@ classdef system3D < handle
                 % solve for lagrange multipliers
                 lambdaVector = LHS\RHS;
                 sys.lambda  = lambdaVector(1:sys.rKDOF*sys.nFreeBodies);
-                lambdaP = lambdaVector(sys.rKDOF*sys.nFreeBodies+1:end); % not sure if I need to use this later. 
+                sys.lambdaP = lambdaVector(sys.rKDOF*sys.nFreeBodies+1:end); % not sure if I need to use this later. 
 
                                 
                 %%%%%%%%%%
@@ -288,19 +298,37 @@ classdef system3D < handle
                 sys.body{i}.addForceOfGravity(); % add gravity force to body
             end
         end
-        function checkInitialConditions(sys) % check that initial conditions satisfy the prescribed constraints
+        function checkInitialConditions(sys,tolerance) % check that initial conditions satisfy the prescribed constraints
             % (ME751_f2016, slide 40-42, lecture 10/17/16)
             % initial conditions must satisfy constraint equations, or we
             % will start off on the wrong foot and wont be able to get a
             % correct solution. We MUST start with in a healthy (consistent)
             % configuration for our solution to make sense.
-            tolerance = 10^-8;
             
+            if ~exist('tolerance','var') || isempty(tolerance)
+               tolerance = 10^-5; % default tolerance
+            end
+            
+            %%%%%%%%%%
             % check that conditions satisfy level zero constraints
             sys.constructPhiF();   % construct phi and phiP matrix
+            if any(abs(sys.phiF) > tolerance)
+                error(' Initial position conditions are not consistent.')
+            end
             
             
+            %%%%%%%%%%
+            % check that conditions satisfy level one constraints
+            sys.constructNu();
+            vel = sys.phi_r*sys.rdot+sys.phi_p*sys.pdot;
+            if any(abs(vel-sys.nu) > tolerance)
+                error(' Initial velocity conditions are not consistent.')
+            end
             
+            sys.constructPMatrix();
+            if any(abs(sys.P*sys.pdot) > tolerance)
+                error(' Initial euler parameter conditions are not consistent.')
+            end
         end
         function plot(sys,varargin) % plots the bodies in the system
             % wrapper to plot functions
@@ -434,7 +462,17 @@ classdef system3D < handle
             % create phiF_q
             sys.phiF_q = [phiF_r phiF_p];
         end
-        function constructNuF(sys) % construct nuF, RHS Of velocity equation
+        function constructNu(sys) % construct nu vector (kinematic & driving constraints)
+            % nu = [(rKDOF) x 1]
+            sys.nu = zeros(sys.rKDOF,1); % initialize nu for speed
+            row = 1;
+            for i = 1:(sys.nConstraints-sys.rPDOF) % only kinematic and driving constraints
+                row_new = row + sys.cons{i}.rDOF - 1;
+                sys.nu(row:row_new)  =  sys.cons{i}.nu; % plug in constraint nu's
+                row = row_new + 1;
+            end
+        end
+        function constructNuF(sys) % construct nuF (full velocity nu vector)
             % nuF = [nConstrainedDOF x 1]
             sys.nuF = zeros(sys.nConstrainedDOF,1); % initialize nuF for speed
             row = 1;
@@ -444,15 +482,30 @@ classdef system3D < handle
                 row = row_new + 1;
             end
         end
-        function constructGammaHatF(sys) % construct gammaHatF, RHS Of acceleration equation, in r-p formulation
-            % gammaHatF = [nConstrainedDOF x 1]
-            sys.gammaHatF = zeros(sys.nConstrainedDOF,1); % initialize nuF for speed
+        function constructGammaHat(sys) % construct gammaHat vector (kinematic & driving constraints)
+            % gammaHat = [(rKDOF) x 1]
+            sys.gammaHat = zeros(sys.rKDOF,1); % initialize nu for speed
             row = 1;
-            for i = 1:sys.nConstraints
+            for i = 1:(sys.nConstraints-sys.rPDOF) % only kinematic and driving constraints
                 row_new = row + sys.cons{i}.rDOF - 1;
-                sys.gammaHatF(row:row_new)  =  sys.cons{i}.gammaHat; % plug in constraint gammaHats's
+                sys.gammaHat(row:row_new)  =  sys.cons{i}.gammaHat; % plug in constraint nu's
                 row = row_new + 1;
             end
+        end
+        function constructGammaHatP(sys) % construct gammaHatP vector (euler parameter constraints)
+            % gammaHatP = [rPDOF x 1]
+            sys.gammaHatP = zeros(sys.rPDOF,1); % initialize phiP for speed
+            consNum = sys.nConstraints-sys.rPDOF+1;
+            for i = 1:sys.rPDOF % only euler parameter constraints
+                sys.gammaHatP(i) = sys.cons{consNum}.gammaHat; % plug in constraint phi's
+                consNum = consNum+1;
+            end
+        end
+        function constructGammaHatF(sys) % construct gammaHatF vector (Full RHS Of acceleration equation)
+            % gammaHatF = [nConstrainedDOF x 1]
+            sys.constructGammaHat();
+            sys.constructGammaHatP();
+            sys.gammaHatF = [sys.gammaHat; sys.gammaHatP];
         end
         function constructQ(sys) % construct q (r and p) of bodies in system
             % get ID's of bodies that are not grounded
@@ -460,19 +513,30 @@ classdef system3D < handle
             
             % initialize for speed
             r = zeros(3*sys.nFreeBodies,1);
+            rdot = zeros(3*sys.nFreeBodies,1);
+            rddot = zeros(3*sys.nFreeBodies,1);
             p = zeros(4*sys.nFreeBodies,1);
+            pdot = zeros(4*sys.nFreeBodies,1);
+            pddot = zeros(4*sys.nFreeBodies,1);
             
-            % pull r and p out of ungrounded bodies
+            % pull r,rdot,rddot and p,pdot,pddot out of ungrounded bodies
             rowr = 1; % r count
             rowp = 1; % p count
             for i = bodyID  
                 r(rowr:rowr+2) = sys.body{i}.r;
+                rdot(rowr:rowr+2) = sys.body{i}.rdot;
+                rddot(rowr:rowr+2) = sys.body{i}.rddot;
                 p(rowp:rowp+3) = sys.body{i}.p;
+                pdot(rowp:rowp+3) = sys.body{i}.pdot;
+                pddot(rowp:rowp+3) = sys.body{i}.pddot;
                 rowr = rowr + 3;
                 rowp = rowp + 4;
             end
             
-            sys.q = [r;p]; % assemble q vector
+            % assemble q,qdot,qddot vector
+            sys.q = [r;p]; 
+            sys.qdot = [rdot;pdot];
+            sys.qddot = [rddot;pddot];
         end
         function positionAnalysis(sys,tolerance,maxIterations) % position analysis of system
             % Performs kinematic position analysis using Newton-Raphson method
@@ -601,6 +665,39 @@ classdef system3D < handle
                 sys.TauHat((4*i-3):4*i) = TauHat;
             end
         end
+        function findInitialAccelerations(sys) % find initial conditions for acceleration
+            % from ME751_f2016, slide 42 from lecture 10/17/2016
+            
+            %%%%%%
+            % fill out LHS matrix
+            sys.constructMMatrix();  % update M
+            sys.constructJpMatrix(); % update J^p
+            sys.constructPhi_q();    % update phi_r & phi_p
+            sys.constructPMatrix();  % update P
+            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z3 = zeros(sys.nFreeBodies);
+            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
+            Z5 = zeros(sys.rKDOF);
+            LHS = [    sys.M         Z1'     Z2'  sys.phi_r';
+                          Z1     sys.Jp   sys.P'  sys.phi_p';
+                          Z2      sys.P      Z3          Z4';
+                   sys.phi_r  sys.phi_p      Z4          Z5];
+            
+            %%%%%%
+            % fill out RHS matrix
+            sys.constructFVector();  % update F
+            sys.constructTauHatVector();  % update TauHat
+            sys.constructGammaHatF();
+            RHS = [sys.F; sys.TauHat; sys.gammaHatP; sys.gammaHat];
+            
+            %%%%%%
+            % solve for initial accelerations
+            accel = LHS\RHS;
+            sys.updateSystem([],[],accel(1:7*sys.nFreeBodies)); % update qddot
+            sys.lambdaP = accel(7*sys.nFreeBodies+1:7*sys.nFreeBodies+sys.rPDOF); % update lambdaP
+            sys.lambda = accel(7*sys.nFreeBodies+sys.rPDOF+1:end); % update lambda
+        end
         function calculateReactions(sys) % calculate reaction forces and torques
             % From ME751_f2016 slide 8 of lecture 10/10/16
             sys.rForce = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
@@ -640,14 +737,12 @@ classdef system3D < handle
             %%% update q (r and p)
             if ~isempty(q)
                 sys.q = q;
-                r = q(1:3*(sys.nFreeBodies));
-                p = q(3*(sys.nFreeBodies)+1:end);
                 
                 rowr = 1;
                 rowp = 1;
                 for i = sys.bodyIDs
-                    sys.body{i}.r = r(rowr:rowr+2);
-                    sys.body{i}.p = p(rowp:rowp+3);
+                    sys.body{i}.r = sys.r(rowr:rowr+2);
+                    sys.body{i}.p = sys.p(rowp:rowp+3);
                     rowr = rowr + 3;
                     rowp = rowp + 4;
                 end
@@ -656,14 +751,12 @@ classdef system3D < handle
             %%% update qdot (rdot and pdot)
             if ~isempty(qdot)
                 sys.qdot = qdot;
-                rdot = qdot(1:3*(sys.nFreeBodies));
-                pdot = qdot(3*(sys.nFreeBodies)+1:end);
                 
                 rowr = 1;
                 rowp = 1;
                 for i = sys.bodyIDs
-                    sys.body{i}.rdot = rdot(rowr:rowr+2);
-                    sys.body{i}.pdot = pdot(rowp:rowp+3);
+                    sys.body{i}.rdot = sys.rdot(rowr:rowr+2);
+                    sys.body{i}.pdot = sys.pdot(rowp:rowp+3);
                     rowr = rowr + 3;
                     rowp = rowp + 4;
                 end
@@ -672,14 +765,12 @@ classdef system3D < handle
             %%% update qddot (rddot and pddot)
             if ~isempty(qddot)
                 sys.qddot = qddot;
-                rddot = qddot(1:3*(sys.nFreeBodies));
-                pddot = qddot(3*(sys.nFreeBodies)+1:end);
                 
                 rowr = 1;
                 rowp = 1;
                 for i = sys.bodyIDs
-                    sys.body{i}.rddot = rddot(rowr:rowr+2);
-                    sys.body{i}.pddot = pddot(rowp:rowp+3);
+                    sys.body{i}.rddot = sys.rddot(rowr:rowr+2);
+                    sys.body{i}.pddot = sys.pddot(rowp:rowp+3);
                     rowr = rowr + 3;
                     rowp = rowp + 4;
                 end
@@ -757,6 +848,24 @@ classdef system3D < handle
             for i = 1:sys.nFreeBodies
                 nForces = nForces + sys.body{bodyID(i)}.nForces;
             end
+        end
+        function r = get.r(sys) % vector of positions of the bodies
+            r = sys.q(1:3*(sys.nFreeBodies));
+        end
+        function rdot = get.rdot(sys) % vector of velocities of the bodies
+            rdot = sys.qdot(1:3*(sys.nFreeBodies));
+        end
+        function rddot = get.rddot(sys) % vector of accelerations of the bodies
+            rddot = sys.qddot(1:3*(sys.nFreeBodies));
+        end
+        function p = get.p(sys) % vector of euler parameters of the bodies (rotation)
+            p = sys.q(3*(sys.nFreeBodies)+1:end);
+        end
+        function pdot = get.pdot(sys) % vector of derivative of euler parameters of the bodies (rotational velocity)
+            pdot = sys.qdot(3*(sys.nFreeBodies)+1:end);
+        end
+        function pddot = get.pddot(sys) % vector of 2nd derivative of euler parameters of the bodies (rotational acceleration)
+            pddot = sys.qddot(3*(sys.nFreeBodies)+1:end);
         end
     end
 end

@@ -73,8 +73,11 @@ sys.addGravityForces();
 
 %% DYNAMICS ANALYSIS
 timeStart = 0; %seconds
-timeEnd = 10;
+timeEnd = 0;%.01; % 10
 timeStep = 10^-2; %10^-3;
+
+
+
 
 state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep);
 
