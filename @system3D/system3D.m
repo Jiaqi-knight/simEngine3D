@@ -39,15 +39,15 @@ classdef system3D < handle
     properties (Dependent)
         bodyIDs;            % ID numbers of ungrounded bodies in the system
         nBodies;            % number of bodies in the system
-        nGroundBodies;      % number of grounded bodies in the system
         nFreeBodies;        % number of free bodies in the system (ungrounded)
-        nGenCoordinates;    % number of generalized coordinates in system
+        nGroundBodies;      % number of grounded bodies in the system
         nConstraints;       % number of constraints in the system
+        nForces;            % count number of forces/torques applied to bodies
+        nGenCoordinates;    % number of generalized coordinates in system
         nConstrainedDOF;    % number of degrees of freedom that have been constrained
         rKDOF;              % number of degrees of freedom removed by kinematic and driving constraints
         rPDOF;              % number of degrees of freedom removed by euler parameter normalization constraints
         nDOF;               % number of Degrees Of Freedom of the system
-        nForceTorque;       % count number of forces/torques applied to bodies
     end
     
     methods (Access = public)
@@ -78,28 +78,27 @@ classdef system3D < handle
         end
         function addBody(sys,varargin) % add a body to the system
             ID = sys.nBodies+1; %body ID number
-            sys.body{ID} = body3D(ID,varargin{:}); % new instance of the body class
-            sys.body{ID}.setAccelerationOfGravity(sys.g);
+            sys.body{ID} = body3D(sys,ID,varargin{:}); % new instance of the body class
         end
         function addConstraint(sys,constraintName,varargin) % add kinematic constraint to the system            
             ID = sys.nConstraints+1; %constraint ID number
             switch  constraintName
                 case 'dp1'
-                    sys.cons{ID} = constraint.dp1(varargin{:}); % new instance of constraint.dp1 class
+                    sys.cons{ID} = constraint.dp1(sys,varargin{:}); % new instance of constraint.dp1 class
                 case 'dp2'
-                    sys.cons{ID} = constraint.dp2(varargin{:}); % new instance of constraint.dp2 class
+                    sys.cons{ID} = constraint.dp2(sys,varargin{:}); % new instance of constraint.dp2 class
                 case 'cd'
-                    sys.cons{ID} = constraint.cd(varargin{:}); % new instance of constraint.cd class
+                    sys.cons{ID} = constraint.cd(sys,varargin{:}); % new instance of constraint.cd class
                 case 'd'
-                    sys.cons{ID} = constraint.d(varargin{:}); % new instance of constraint.d class
+                    sys.cons{ID} = constraint.d(sys,varargin{:}); % new instance of constraint.d class
                 case 'p1'
-                    sys.cons{ID} = constraint.p1(varargin{:}); % new instance of constraint.p1 class
+                    sys.cons{ID} = constraint.p1(sys,varargin{:}); % new instance of constraint.p1 class
                 case 'p2'
-                    sys.cons{ID} = constraint.p2(varargin{:}); % new instance of constraint.p2 class
+                    sys.cons{ID} = constraint.p2(sys,varargin{:}); % new instance of constraint.p2 class
                 case 'sj'
-                    sys.cons{ID} = constraint.sj(varargin{:}); % new instance of constraint.sj class
+                    sys.cons{ID} = constraint.sj(sys,varargin{:}); % new instance of constraint.sj class
                 case 'rj'
-                    sys.cons{ID} = constraint.rj(varargin{:}); % new instance of constraint.rj class
+                    sys.cons{ID} = constraint.rj(sys,varargin{:}); % new instance of constraint.rj class
                 otherwise
                     error('Constraint not implemented yet.');
             end
@@ -289,6 +288,20 @@ classdef system3D < handle
                 sys.body{i}.addForceOfGravity(); % add gravity force to body
             end
         end
+        function checkInitialConditions(sys) % check that initial conditions satisfy the prescribed constraints
+            % (ME751_f2016, slide 40-42, lecture 10/17/16)
+            % initial conditions must satisfy constraint equations, or we
+            % will start off on the wrong foot and wont be able to get a
+            % correct solution. We MUST start with in a healthy (consistent)
+            % configuration for our solution to make sense.
+            tolerance = 10^-8;
+            
+            % check that conditions satisfy level zero constraints
+            sys.constructPhiF();   % construct phi and phiP matrix
+            
+            
+            
+        end
         function plot(sys,varargin) % plots the bodies in the system
             % wrapper to plot functions
             plot.plotSystem(sys,varargin{:});
@@ -301,7 +314,7 @@ classdef system3D < handle
             ID = sys.nConstraints+1; %constraint ID number
             for i = 1:sys.nBodies
                 if ~sys.body{i}.isGround
-                    sys.cons{ID} = constraint.p_norm(sys.body{i}); % new instance of constraint.p_norm class
+                    sys.cons{ID} = constraint.p_norm(sys,sys.body{i}); % new instance of constraint.p_norm class
                     ID = ID+1;
                 end
             end
@@ -562,7 +575,7 @@ classdef system3D < handle
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
             for i = 1:sys.nFreeBodies % iterate through every free body
                 F = zeros(3,1);
-                for j = 1:sys.body{bodyID(i)}.nForceTorque
+                for j = 1:sys.body{bodyID(i)}.nForces
                     F = F + sys.body{bodyID(i)}.forces{j}.force; % sum active and gravitational forces acting on that body
                 end
                 sys.F((3*i-2):3*i) = F;
@@ -575,8 +588,7 @@ classdef system3D < handle
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
             for i = 1:sys.nFreeBodies % iterate through every free body
                 nBar = zeros(3,1);
-                for j = 1:sys.body{bodyID(i)}.nForceTorque
-                    sys.body{bodyID(i)}.updateForces(); % make sure force torques are accurate relative to body orientation
+                for j = 1:sys.body{bodyID(i)}.nForces
                     nBar = nBar + sys.body{bodyID(i)}.forces{j}.torque; % sum active and gravitational torques acting on that body
                 end
                 
@@ -589,7 +601,7 @@ classdef system3D < handle
                 sys.TauHat((4*i-3):4*i) = TauHat;
             end
         end
-        function calculateReactions(sys)
+        function calculateReactions(sys) % calculate reaction forces and torques
             % From ME751_f2016 slide 8 of lecture 10/10/16
             sys.rForce = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
             sys.rTorque = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
@@ -674,12 +686,9 @@ classdef system3D < handle
             end
         end
         function setSystemTime(sys,t) % set time for entire system
-            % set system time
+            % set system time. Bodies, constraints, and forces should be
+            % able to access this time.
             sys.time = t;
-            % update constraints time
-            for i = 1:sys.nConstraints
-                sys.cons{i}.t = t;
-            end
         end
     end
     methods % methods block with no attributes
@@ -742,11 +751,11 @@ classdef system3D < handle
         function nDOF = get.nDOF(sys) % count number of Degrees of Freedom
             nDOF = sys.nGenCoordinates - (sys.rKDOF + sys.rPDOF);
         end
-        function nForceTorque = get.nForceTorque(sys) % count number of forces/torques applied to bodies
+        function nForces = get.nForces(sys) % count number of forces/torques applied to bodies
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
-            nForceTorque = 0;
+            nForces = 0;
             for i = 1:sys.nFreeBodies
-                nForceTorque = nForceTorque + sys.body{bodyID(i)}.nForceTorque;
+                nForces = nForces + sys.body{bodyID(i)}.nForces;
             end
         end
     end

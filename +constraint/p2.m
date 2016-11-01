@@ -12,6 +12,7 @@ classdef p2 < handle
     % that are contained in that plane. This GCon is built using dp2 twice.
     
     properties
+        system;     % parent system3D object to which this constraint is a member. 
         rDOF = 2;   % removes 2 degree of freedom
         bodyi;      % body i
         bodyj;      % body j
@@ -22,7 +23,6 @@ classdef p2 < handle
         Pi;         % ID number for point P on body i, tail of PiQj vector
         Qj;         % ID number for point Q on body j, head of PiQj vector
         subCons;    % cell array of sub-constraints
-        t;          % system time
     end
     properties (Dependent)
         aBari;      % vector in body i RF
@@ -37,7 +37,8 @@ classdef p2 < handle
     
     methods
         %constructor function
-        function cons = p2(bodyi,aBari_tail,aBari_head,bBari_tail,bBari_head,PiID,bodyj,QjID) %constructor function
+        function cons = p2(system,bodyi,aBari_tail,aBari_head,bBari_tail,bBari_head,PiID,bodyj,QjID) %constructor function
+            cons.system = system;
             cons.bodyi = bodyi;
             cons.aBari_tail = aBari_tail;
             cons.aBari_head = aBari_head;
@@ -46,12 +47,11 @@ classdef p2 < handle
             cons.Pi = PiID;
             cons.bodyj = bodyj;
             cons.Qj = QjID;
-            cons.t = 0;
                             
             % create cell array of all sub constraints
             % from ME751_f2016 slide 25 from lecture 09/26/16
-            cons.subCons{1} = constraint.dp2(cons.bodyi,cons.aBari_tail,cons.aBari_head,cons.Pi,cons.bodyj,cons.Qj);
-            cons.subCons{2} = constraint.dp2(cons.bodyi,cons.bBari_tail,cons.bBari_head,cons.Pi,cons.bodyj,cons.Qj);
+            cons.subCons{1} = constraint.dp2(cons.system,cons.bodyi,cons.aBari_tail,cons.aBari_head,cons.Pi,cons.bodyj,cons.Qj);
+            cons.subCons{2} = constraint.dp2(cons.system,cons.bodyi,cons.bBari_tail,cons.bBari_head,cons.Pi,cons.bodyj,cons.Qj);
             
             if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''p2'' are not consistent. But solution will converge so constraints are satisfied.')

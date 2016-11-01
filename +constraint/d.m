@@ -17,6 +17,7 @@ classdef d < handle
     % 09/26/16)
     
     properties
+        system; % parent system3D object to which this constraint is a member. 
         rDOF = 1; % removes 1 degree of freedom
         bodyi;  % body i
         bodyj;  % body j
@@ -25,7 +26,6 @@ classdef d < handle
         f;      % prescribed distance constraint, > 0, and can be a function of t.
         fdot;   % derivative of f
         fddot;  % derivative of fdot
-        t;      % system time
     end
     properties (Dependent)
         PiQj;   % vector in GLOBAL RF form point P on body i to point Q on body j
@@ -38,7 +38,7 @@ classdef d < handle
     
     methods
         %constructor function
-        function cons = d(bodyi,PiID,bodyj,QjID,f,fdot,fddot,t) %constructor function
+        function cons = d(system,bodyi,PiID,bodyj,QjID,f,fdot,fddot,t) %constructor function
             if exist('f','var') && (f <=0)
                 error('D constraint cannot have a prescribed distance <= 0');
             end
@@ -51,10 +51,8 @@ classdef d < handle
             if ~exist('fddot','var') || isempty(fddot)
                 fddot = 0; % derivative of fdt
             end
-            if ~exist('t','var') || isempty(t)
-                t = 0; % default time
-            end
-            
+
+            cons.system = system;
             cons.bodyi = bodyi;
             cons.Pi = PiID;
             cons.bodyj = bodyj;
@@ -62,7 +60,6 @@ classdef d < handle
             cons.f = f;
             cons.fdot = fdot;
             cons.fddot = fddot;
-            cons.t = t;
             
             if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''d'' are not consistent. But solution will converge so constraints are satisfied.')
@@ -78,7 +75,7 @@ classdef d < handle
             
             % see if constraint is a function
             if isa(cons.f, 'function_handle')
-                fVal = cons.f(cons.t); %evaluate at time t
+                fVal = cons.f(cons.system.time); %evaluate at system time
             else % constant value
                 fVal = cons.f;
             end
@@ -91,7 +88,7 @@ classdef d < handle
             
             if isa(cons.fdot, 'function_handle')
                 fVal = cons.f(cons.t); %evaluate at time t
-                fdotVal = cons.fdot(cons.t); %evaluate at time t
+                fdotVal = cons.fdot(cons.system.time); %evaluate at system time
             else % constant value
                 fVal = cons.f;
                 fdotVal = cons.fdot;
@@ -106,9 +103,9 @@ classdef d < handle
             
             % see if constraint is a function
             if isa(cons.fddot, 'function_handle')
-                fVal = cons.f(cons.t); %evaluate at time t
-                fdotVal = cons.fdot(cons.t); %evaluate at time t
-                fddotVal = cons.fddot(cons.t); %evaluate at time t
+                fVal = cons.f(cons.system.time); %evaluate at system time
+                fdotVal = cons.fdot(cons.system.time); %evaluate at system time
+                fddotVal = cons.fddot(cons.system.time); %evaluate at system time
             else % constant value
                 fVal = cons.f;
                 fdotVal = cons.fdot;

@@ -12,6 +12,7 @@ classdef p1 < handle
     % that plane. This GCon is built using dp1 twice.
     
     properties
+        system; % parent system3D object to which this constraint is a member. 
         rDOF = 2; % removes 2 degrees of freedom
         bodyi;  % body i
         bodyj;  % body j
@@ -22,7 +23,6 @@ classdef p1 < handle
         cBarj_tail; % ID number for point cBarj_tail on body j, tail of cBarj vector
         cBarj_head; % ID number for point cBarj_head on body j, head of cBarj vector
         subCons; % cell array of sub-constraints
-        t;      % system time
     end
     properties (Dependent)
         aBari;  % vector in body i RF
@@ -37,8 +37,10 @@ classdef p1 < handle
     
     methods
         %constructor function
-        function cons = p1(bodyi,aBari_tail,aBari_head,bBari_tail,bBari_head,...
-                           bodyj,cBarj_tail,cBarj_head) %constructor function
+        function cons = p1(system,bodyi,aBari_tail,aBari_head,bBari_tail,bBari_head,...
+                bodyj,cBarj_tail,cBarj_head) %constructor function
+            
+            cons.system = system;
             cons.bodyi = bodyi;
             cons.aBari_tail = aBari_tail;
             cons.aBari_head = aBari_head;
@@ -47,12 +49,11 @@ classdef p1 < handle
             cons.bodyj = bodyj;
             cons.cBarj_tail = cBarj_tail;
             cons.cBarj_head = cBarj_head;
-            cons.t = 0;
-                
+            
             % create cell array of all sub constraints
             % from ME751_f2016 slide 23 from lecture 09/26/16
-            cons.subCons{1} = constraint.dp1(cons.bodyi,cons.aBari_tail,cons.aBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
-            cons.subCons{2} = constraint.dp1(cons.bodyi,cons.bBari_tail,cons.bBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
+            cons.subCons{1} = constraint.dp1(cons.system,cons.bodyi,cons.aBari_tail,cons.aBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
+            cons.subCons{2} = constraint.dp1(cons.system,cons.bodyi,cons.bBari_tail,cons.bBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
             
             if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''p1'' are not consistent. But solution will converge so constraints are satisfied.')

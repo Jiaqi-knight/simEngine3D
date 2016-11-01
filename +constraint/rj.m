@@ -13,6 +13,7 @@ classdef rj < handle
     % constraint.
     
     properties
+        system; % parent system3D object to which this constraint is a member. 
         rDOF = 5; % removes 5 degree of freedom
         bodyi;  % body i
         bodyj;  % body j
@@ -25,7 +26,6 @@ classdef rj < handle
         cBarj_tail; % ID number for point cBarj_tail on body j, tail of cBarj vector
         cBarj_head; % ID number for point cBarj_head on body j, head of cBarj vector
         subCons; % cell array of sub-constraints
-        t;      % system time
     end
     properties (Dependent)
         phi;    % value of the expression of the constraint PHI^rj
@@ -37,8 +37,9 @@ classdef rj < handle
     
     methods
         %constructor function
-        function cons = rj(bodyi,PiID,aBari_tail,aBari_head,bBari_tail,bBari_head,...
+        function cons = rj(system,bodyi,PiID,aBari_tail,aBari_head,bBari_tail,bBari_head,...
                            bodyj,QjID,cBarj_tail,cBarj_head) %constructor function
+            cons.system = system;
             cons.bodyi = bodyi;
             cons.Pi = PiID;
             cons.aBari_tail = aBari_tail;
@@ -49,12 +50,11 @@ classdef rj < handle
             cons.Qj = QjID;
             cons.cBarj_tail = cBarj_tail;
             cons.cBarj_head = cBarj_head;
-            cons.t = 0;
             
             % create cell array of all sub constraints
             % from ME751_f2016 slide 33 from lecture 09/26/16
-            cons.subCons{1} = constraint.sj(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
-            cons.subCons{2} = constraint.p1(cons.bodyi,cons.aBari_tail,cons.aBari_head,...
+            cons.subCons{1} = constraint.sj(cons.system,cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
+            cons.subCons{2} = constraint.p1(cons.system,cons.bodyi,cons.aBari_tail,cons.aBari_head,...
                 cons.bBari_tail,cons.bBari_head,cons.bodyj,cons.cBarj_tail,cons.cBarj_head);
             
             if abs(cons.phi) > 1e-4

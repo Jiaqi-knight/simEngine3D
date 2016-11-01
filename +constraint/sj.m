@@ -11,13 +11,13 @@ classdef sj < handle
     % This GCon is built by using 3 cd constraints.
     
     properties
+        system; % parent system3D object to which this constraint is a member. 
         rDOF = 3; % removes 3 degree of freedom
         bodyi;  % body i
         bodyj;  % body j
         Pi;     % ID number for point P on body i
         Qj;     % ID number for point Q on body j
         subCons; % cell array of sub-constraints
-        t;      % system time
     end
     properties (Dependent)
         phi;    % value of the expression of the constraint PHI^sj
@@ -29,18 +29,18 @@ classdef sj < handle
     
     methods
         %constructor function
-        function cons = sj(bodyi,PiID,bodyj,QjID) %constructor function
+        function cons = sj(system,bodyi,PiID,bodyj,QjID) %constructor function
+            cons.system = system;
             cons.bodyi = bodyi;
             cons.Pi = PiID;
             cons.bodyj = bodyj;
             cons.Qj = QjID;
-            cons.t = 0;
             
             % create cell array of all sub constraints
             % from ME751_f2016 slide 27 from lecture 09/26/16
-            cons.subCons{1} = constraint.cd('x',cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
-            cons.subCons{2} = constraint.cd('y',cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
-            cons.subCons{3} = constraint.cd('z',cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
+            cons.subCons{1} = constraint.cd(cons.system,'x',cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
+            cons.subCons{2} = constraint.cd(cons.system,'y',cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
+            cons.subCons{3} = constraint.cd(cons.system,'z',cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
                 
             if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''sj'' are not consistent. But solution will converge so constraints are satisfied.')

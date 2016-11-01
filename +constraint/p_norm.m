@@ -12,9 +12,9 @@ classdef p_norm < handle
     % is equal to 1. or, p'*p-1 = 0
     
     properties
+        system; % parent system3D object to which this constraint is a member. 
         rDOF = 1; % removes 1 degree of freedom
         bodyi;  % body i
-        t;      % system time
     end
     properties (Dependent)
         phi;    % value of the expression of the constraint PHI^p_norm
@@ -26,9 +26,9 @@ classdef p_norm < handle
     
     methods
         %constructor function
-        function cons = p_norm(bodyi) %constructor function
+        function cons = p_norm(system,bodyi) %constructor function
+            cons.system = system;
             cons.bodyi = bodyi;
-            cons.t = 0;
         end
         function phi = get.phi(cons) % value of the expression of the constraint PHI^p_norm
             % from ME751_f2016 slide 24 from lecture 9/28/16

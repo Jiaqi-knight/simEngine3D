@@ -13,6 +13,7 @@ classdef cd < handle
     % j assume a specified value f.
     
     properties
+        system; % parent system3D object to which this constraint is a member. 
         rDOF = 1; % removes 1 degree of freedom
         cName;  % coordinate of interest {'x','y','z'}
         bodyi;  % body i
@@ -22,7 +23,6 @@ classdef cd < handle
         f;      % prescribed constraint, often 0, but can be a function of t
         fdot;   % derivative of f
         fddot;  % derivative of fdot
-        t;      % system time
     end
     properties (Dependent)
         c;      % unit vector of the coordinate of interest [3x1]
@@ -35,7 +35,7 @@ classdef cd < handle
     
     methods
         %constructor function
-        function cons = cd(cName,bodyi,PiID,bodyj,QjID,f,fdot,fddot,t) %constructor function
+        function cons = cd(system,cName,bodyi,PiID,bodyj,QjID,f,fdot,fddot,t) %constructor function
             if ~exist('f','var') || isempty(f)
                 f = 0; % prescribed difference is 0
             end
@@ -45,10 +45,8 @@ classdef cd < handle
             if ~exist('fddot','var') || isempty(fddot)
                 fddot = 0; % derivative of fdt
             end
-            if ~exist('t','var') || isempty(t)
-                t = 0; % default time
-            end
             
+            cons.system = system;
             cons.cName = cName;
             cons.bodyi = bodyi;
             cons.Pi = PiID;
@@ -57,7 +55,6 @@ classdef cd < handle
             cons.f = f;
             cons.fdot = fdot;
             cons.fddot = fddot;
-            cons.t = t;
             
             if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''cd'' are not consistent. But solution will converge so constraints are satisfied.')
@@ -81,7 +78,7 @@ classdef cd < handle
             
             % see if constraint is a function
             if isa(cons.f, 'function_handle')
-                fVal = cons.f(cons.t); %evaluate at time t
+                fVal = cons.f(cons.system.time); %evaluate at system time
             else % constant value
                 fVal = cons.f;
             end
@@ -94,7 +91,7 @@ classdef cd < handle
             
             % see if constraint is a function
             if isa(cons.fdot, 'function_handle')
-                fdotVal = cons.fdot(cons.t); %evaluate at time t
+                fdotVal = cons.fdot(cons.system.time); %evaluate at system time
             else % constant value
                 fdotVal = cons.fdot;
             end
@@ -107,7 +104,7 @@ classdef cd < handle
             
             % see if constraint is a function
             if isa(cons.fddot, 'function_handle')
-                fddotVal = cons.fddot(cons.t); %evaluate at time t
+                fddotVal = cons.fddot(cons.system.time); %evaluate at system time
             else % constant value
                 fddotVal = cons.fddot;
             end
