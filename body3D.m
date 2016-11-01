@@ -5,10 +5,12 @@ classdef body3D < handle
     %
     % About:
     % a generic spatial rigid body, including all the attributes of the
-    % body, as well as local points on the body.This also
+    % body, as well as local points on the body. This also
     % estabilishes the local reference frame. Assumes center of mass is the
     % center of the BODY RF.
     properties
+        system;   % parent system3D object to which this body is a member. 
+                  % useful because it containts system time and gravity
         ID;       % body ID number
         r;        % = [x;y;z] location of body RF from GLOBAL RF        
         p;        % = [e0;e1;e2;e3] euler parameters of BODY RF
@@ -20,19 +22,15 @@ classdef body3D < handle
         Jbar;     % inertia tensor of the part, in BODY RF
         isGround; % if body is ground
         point;    % structure of points on the body, defined in BODY RF
-        forces;  % collection of forces and torques applied to body
-                  % forces.force    : vector, force applied at a point, expressed in GLOBAL RF
-                  % forces.location : vector, where the applied force is located, expressed in BODY RF
-                  % forces.torque   : vector, torque applied, expressed in BODY RF
-        g;        % acceleration due to gravity, vector
+        forces;   % collection of forces3D objects, defining forces and torques applied to body
     end
     properties (Dependent)
         nPoints; % number of points on the body
         A; % rotation matrix, an expression of the euler parameters
-        nForceTorque; % number of forces/torques applied  
+        nForces; % number of forces/torques applied  
     end
-    methods (Access = public)
-        function body = body3D(ID,bodyType,r,p,rdot,pdot,rddot,pddot) %constructor function
+    methods (Access = private)
+        function body = body3D(system,ID,bodyType,r,p,rdot,pdot,rddot,pddot) %constructor function
             switch bodyType
                 case 'ground'
                     isGround = 1;
@@ -61,6 +59,7 @@ classdef body3D < handle
             end
             
             % instantiate body properties
+            body.system = system;
             body.ID = ID;
             body.r = r;
             body.p = p;
@@ -93,52 +92,17 @@ classdef body3D < handle
             end
             body.Jbar = inertiaTensor;
         end
-        function setAccelerationOfGravity(body,g) % set acceleration of gravity for body
-            % input:
-            %   g : acceleration due to gravity, as vector in GLOBAL RF
-            body.g = g;
-        end
         function addForceOfGravity(body) % add force of gravity
             % from ME751_f2016 slide 29 of lecture 10/03/16.
-            % acts at body center of mass, assumed to be the origin
-            ID = body.nForceTorque + 1;
-            body.forces{ID}.force = body.m*body.g; 
-            body.forces{ID}.location = [0;0;0];
-            body.forces{ID}.torque = zeros(3,1);
+            ID = body.nForces + 1;
+            forceLocation = [0;0;0]; % acts at body center of mass, assumed to be the origin
+            forceMagnitude = norm(body.m*body.system.g);
+            unitDirection = (body.m*body.system.g)/forceMagnitude;
+            body.forces{ID} = forces3D(body,'force2',forceLocation,forceMagnitude,unitDirection); % new instance of the forces3D class
         end
-        function addTorque(body,torque) % add active torque to body
-            % from ME751_f2016 slide 27 of lecture 10/03/16.
-            % since torque acts along the whole rigid body, no need to
-            % specify a point of application
-            % INPUTS:
-            %   torque   : vector, torque applied, expressed in BODY RF
-            
-            ID = body.nForceTorque + 1;
-            body.forces{ID}.force = [0;0;0]; 
-            body.forces{ID}.location = [0;0;0];
-            body.forces{ID}.torque = torque;
-        end
-        function addForce(body,force,pointID) % add active force to body
-            % from ME751_f2016 slide 27 of lecture 10/03/16.
-            % sometimes a force has a corresponding torque.
-            % INPUTS:
-            %   force   : vector, force applied at the point, expressed in GLOBAL RF
-            %   pointID : ID of the body point where the force is applied
-            
-            ID = body.nForceTorque + 1;
-            body.forces{ID}.force = force; 
-            body.forces{ID}.location = body.point{pointID};
-            sBar = body.point{pointID};
-            body.forces{ID}.torque = utility.tilde(sBar)*body.A'*body.forces{ID}.force;
-        end
-        function updateForces(body) % make sure force torques are accurate relative to orientation of body
-           % this only really matters for active torques
-           for i = 1: body.nForceTorque
-               sBar = body.forces{i}.location; % point of application of force
-               if ~isequal(sBar,[0;0;0]) % if force not acting at Center of Mass,
-                   body.forces{i}.torque = utility.tilde(sBar)*body.A'*body.forces{ID}.force;
-               end
-           end
+        function addForces(body,varargin) % add active force / torque to body
+            ID = body.nForces + 1;
+            body.forces{ID} = forces3D(body,varargin{:}); % new instance of the forces3D class
         end
     end
     methods % methods block with no attributes
@@ -148,9 +112,9 @@ classdef body3D < handle
         function A = get.A(body) % calculate rotation matrix, an expression of the euler parameters
             A = utility.p2A(body.p);
         end
-        function nForceTorque = get.nForceTorque(body)
+        function nForces = get.nForces(body)
             % calculate the number of Force-Torque combinations applied to the body
-            nForceTorque = length(body.forces);
+            nForces = length(body.forces);
         end
     end
 end
