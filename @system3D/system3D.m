@@ -23,6 +23,7 @@ classdef system3D < handle
         phiF;           % full constraint matrix phiF = [phi; phiP]
         phiF_q;         % jacobian of phiF
         nu;             % RHS of velocity equation
+        nuP;            % RHS of velocity equation, for euler parameters
         nuF;            % RHS of Full velocity equation
         gammaHat;       % RHS of acceleration equation, in r-p formulation
         gammaHatP;      % RHS of acceleration equation for euler parameter constraints
@@ -132,13 +133,6 @@ classdef system3D < handle
             %
             % output:
             %   state = cell array of states of system
-            %
-            % to further clarify, each cell of state is a structure,
-            % defining the state of system. For example, at timePoint 1:
-            %   state{1}.time
-            %   state{1}.q 
-            %   state{1}.qdot
-            %   state{1}.qddot 
             
             if sys.nDOF >0
                 error('For kinematics analysis, the total number of degrees of freedom must be zero.');
@@ -168,12 +162,7 @@ classdef system3D < handle
                 sys.accelerationAnalysis();
                 
                 % store system state:
-                % return position and orientation information for the
-                % current time step
-                state{iT}.time = sys.time;
-                state{iT}.q = sys.q;
-                state{iT}.qdot = sys.qdot;
-                state{iT}.qddot = sys.qddot;
+                state{iT} = sys.getSystemState();
                 
                 disp(['Kinematics analysis completed for t = ' num2str(t) ' sec.']);
             end
@@ -195,16 +184,7 @@ classdef system3D < handle
             %
             % output:
             %   state = cell array of states of system
-            %
-            % to further clarify, each cell of state is a structure,
-            % defining the state of system. For example, at timePoint 1:
-            %   state{1}.time
-            %   state{1}.q 
-            %   state{1}.qdot
-            %   state{1}.qddot
-            %   state{1}.rForce
-            %   state{1}.rTorque
-                        
+                                                
             if sys.nDOF >0
                 error('For inverse dynamics analysis, the total number of degrees of freedom must be zero.');
             end
@@ -280,15 +260,8 @@ classdef system3D < handle
                 sys.calculateReactions(); % in sys.rForce, sys.rTorque
                 
                 % store system state:
-                % return position and orientation information for the
-                % current time step
-                state{iT}.time = sys.time;
-                state{iT}.q = sys.q;
-                state{iT}.qdot = sys.qdot;
-                state{iT}.qddot = sys.qddot;
-                state{iT}.rForce = sys.rForce;
-                state{iT}.rTorque = sys.rTorque;
-
+                state{iT} = sys.getSystemState();
+                
                 disp(['Inverse dynamics analysis completed for t = ' num2str(t) ' sec.']);
             end
         end
@@ -319,7 +292,7 @@ classdef system3D < handle
             
             %%%%%%%%%%
             % check that conditions satisfy level one constraints
-            sys.constructNu();
+            sys.constructNuF();
             vel = sys.phi_r*sys.rdot+sys.phi_p*sys.pdot;
             if any(abs(vel-sys.nu) > tolerance)
                 error(' Initial velocity conditions are not consistent.')
@@ -472,15 +445,20 @@ classdef system3D < handle
                 row = row_new + 1;
             end
         end
+        function constructNuP(sys) % construct nu vector (euler parameter constraints)
+            % nuP = [rPDOF x 1]
+            sys.nuP = zeros(sys.rPDOF,1); % initialize phiP for speed
+            consNum = sys.nConstraints-sys.rPDOF+1;
+            for i = 1:sys.rPDOF % only euler parameter constraints
+                sys.nuP(i) = sys.cons{consNum}.nu; % plug in constraint nu's
+                consNum = consNum+1;
+            end
+        end
         function constructNuF(sys) % construct nuF (full velocity nu vector)
             % nuF = [nConstrainedDOF x 1]
-            sys.nuF = zeros(sys.nConstrainedDOF,1); % initialize nuF for speed
-            row = 1;
-            for i = 1:sys.nConstraints
-                row_new = row + sys.cons{i}.rDOF - 1;
-                sys.nuF(row:row_new)  =  sys.cons{i}.nu; % plug in constraint nu's
-                row = row_new + 1;
-            end
+            sys.constructNu();
+            sys.constructNuP();
+            sys.nuF = [sys.nu; sys.nuP];
         end
         function constructGammaHat(sys) % construct gammaHat vector (kinematic & driving constraints)
             % gammaHat = [(rKDOF) x 1]
@@ -494,10 +472,10 @@ classdef system3D < handle
         end
         function constructGammaHatP(sys) % construct gammaHatP vector (euler parameter constraints)
             % gammaHatP = [rPDOF x 1]
-            sys.gammaHatP = zeros(sys.rPDOF,1); % initialize phiP for speed
+            sys.gammaHatP = zeros(sys.rPDOF,1); % initialize gammaHatP for speed
             consNum = sys.nConstraints-sys.rPDOF+1;
             for i = 1:sys.rPDOF % only euler parameter constraints
-                sys.gammaHatP(i) = sys.cons{consNum}.gammaHat; % plug in constraint phi's
+                sys.gammaHatP(i) = sys.cons{consNum}.gammaHat; % plug in constraint gammaHat's
                 consNum = consNum+1;
             end
         end
@@ -672,6 +650,7 @@ classdef system3D < handle
             % fill out LHS matrix
             sys.constructMMatrix();  % update M
             sys.constructJpMatrix(); % update J^p
+            sys.constructPhiF();     % update phi & phiP
             sys.constructPhi_q();    % update phi_r & phi_p
             sys.constructPMatrix();  % update P
             Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
@@ -686,9 +665,9 @@ classdef system3D < handle
             
             %%%%%%
             % fill out RHS matrix
-            sys.constructFVector();  % update F
+            sys.constructFVector();       % update F
             sys.constructTauHatVector();  % update TauHat
-            sys.constructGammaHatF();
+            sys.constructGammaHatF();     % gammaHat and gammaHatF
             RHS = [sys.F; sys.TauHat; sys.gammaHatP; sys.gammaHat];
             
             %%%%%%
@@ -697,6 +676,132 @@ classdef system3D < handle
             sys.updateSystem([],[],accel(1:7*sys.nFreeBodies)); % update qddot
             sys.lambdaP = accel(7*sys.nFreeBodies+1:7*sys.nFreeBodies+sys.rPDOF); % update lambdaP
             sys.lambda = accel(7*sys.nFreeBodies+sys.rPDOF+1:end); % update lambda
+            sys.calculateReactions(); % derive sys.rForce, sys.rTorque
+        end
+        function QN_BDF1(sys,h,state) % Quasi-Newton using BDF order 1
+            % Perform Quasi-Newton iteration using
+            % Backwards Difference Formula, Order 1
+            % (this is also known as the Backwards Euler Method)
+            % see ME751_f2016, slides 18-22, 10/14/16
+            % also see ME751_f2016, slide 43, 10/17/16
+            % 
+            % Note: This function only solves one intergration step, at the current system time
+            %
+            % INPUTS:
+            %      h : step size, in seconds
+            %  state : structure of system values at previous time step, t(n-1)
+            
+            % solver parameters
+            maxIterations = 10; % 50;
+            tolerance = 1e-8;
+            
+            % BDF constants
+            beta0  =  1;
+            alpha1 = -1;
+            
+            %%%%%%%%%%%
+            % STEP 0 : prime new time step
+            % (follow Iteration steps from slide 43, 10/17/16)
+            
+            % Constant terms from slide 30-31, lecture 10/14/16
+            Crdot   = -alpha1*state.rdot;
+            Cpdot   = -alpha1*state.pdot;
+            Cr      = -alpha1*state.r + beta0*h*Crdot;
+            Cp      = -alpha1*state.p + beta0*h*Cpdot;
+            
+            % initial guesses
+            rddot   = state.rddot;
+            pddot   = state.pddot;
+            lambdaP = state.lambdaP;
+            lambda  = state.lambda;
+            
+
+            % useful constants
+            sys.constructMMatrix();  % update M
+            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z3 = zeros(sys.nFreeBodies);
+            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
+            Z5 = zeros(sys.rKDOF);
+            
+            % Quasi-Newton Iteration Method
+            nu = 1; % iteration counter
+            while nu < maxIterations
+                %%%%%%%%%%%
+                % STEP 1 : compute position and velocity using BDF and most recent accelerations
+                r     = Cr + beta0^2*h^2*rddot;
+                p     = Cp + beta0^2*h^2*pddot;
+                rdot  = Crdot + beta0*h*rddot;
+                pdot  = Cpdot + beta0*h*pddot;
+                sys.updateSystem([r; p],[rdot; pdot],[]);
+                
+                %%%%%%%%%%%
+                % STEP 2 : compute the residual (g) in nonlinear system, which
+                % is a function of most recent accelerations
+                % (see slide 26, 10/17/16)
+                sys.constructPhiF();            % update phi & phiP
+                sys.constructJpMatrix();        % update J^p
+                sys.constructPhi_q();           % update phi_r & phi_p
+                sys.constructPMatrix();         % update P
+                sys.constructFVector();         % update F
+                sys.constructTauHatVector();    % update TauHat
+                
+                % descretized equations of motion
+                g = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
+                    sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
+                    1/(beta0^2*h^2)*sys.phiP;
+                    1/(beta0^2*h^2)*sys.phi];
+                
+                %%%%%%%%%%%
+                % STEP 3 : Solve nonlinear system to get correction deltaZ. 
+                % Use a QUASI-NEWTON iteration matrix (psi).
+                % (see slide 26, 10/17/16)
+                if nu == 1
+                    psi = [    sys.M         Z1'     Z2'  sys.phi_r';
+                                  Z1     sys.Jp   sys.P'  sys.phi_p';
+                                  Z2      sys.P      Z3          Z4';
+                           sys.phi_r  sys.phi_p      Z4          Z5];
+                end
+                deltaZ = psi\-g; % shoots far away. Not a small correction.
+                
+                %%%%%%%%%%%
+                % STEP 4 : Improve the quality of the approximate solution
+                Z_old = [rddot; pddot; lambdaP; lambda];
+                Z = Z_old + deltaZ;
+                rddot = Z(1:length(rddot));
+                pddot = Z(length(rddot)+1:length(rddot)+length(pddot));
+                lambdaP = Z(length(rddot)+length(pddot)+1:length(rddot)+length(pddot)+length(lambdaP));
+                lambda  = Z(length(rddot)+length(pddot)+length(lambdaP)+1:end);
+                
+                %%%%%%%%%%%
+                % STEP 5 : if the norm of the correction is small enough,
+                % go to step 6. Otherwise
+                nu = nu + 1;
+                %norm(deltaZ)
+                
+                if norm(deltaZ) < tolerance
+                    break;
+                end
+            end
+            if nu >= maxIterations % notify of failed convergence
+                error (['Did not converge in Quasi-Newton iteration, BDF1. Time = ' num2str(sys.time)]);
+            end
+            
+            %%%%%%%%%%%
+            % STEP 6 : Accep the acclerations and lambdas computed in step
+            % 4 as the solutions. Using the acclerations, find position and
+            % velocities.
+            r     = Cr + beta0^2*h^2*rddot;
+            p     = Cp + beta0^2*h^2*pddot;
+            rdot  = Crdot + beta0*h*rddot;
+            pdot  = Cpdot + beta0*h*pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[rddot; pddot]); % final system state
+            sys.lambdaP = lambdaP;
+            sys.lambda = lambda;
+            sys.calculateReactions(); % derive sys.rForce, sys.rTorque
+            
+            % At this point you just finished one integration step. Life is
+            % good. Now repeat this for another time step
         end
         function calculateReactions(sys) % calculate reaction forces and torques
             % From ME751_f2016 slide 8 of lecture 10/10/16
@@ -775,6 +880,19 @@ classdef system3D < handle
                     rowp = rowp + 4;
                 end
             end
+        end
+        function state = getSystemState(sys) % return structure of relevant state variables
+            state.time = sys.time;
+            state.r = sys.r;
+            state.p = sys.p;
+            state.rdot = sys.rdot;
+            state.pdot = sys.pdot;
+            state.rddot = sys.rddot;
+            state.pddot = sys.pddot;
+            state.lambda = sys.lambda;
+            state.lambdaP = sys.lambdaP;
+            state.rForce = sys.rForce;
+            state.rTorque = sys.rTorque;
         end
         function setSystemTime(sys,t) % set time for entire system
             % set system time. Bodies, constraints, and forces should be

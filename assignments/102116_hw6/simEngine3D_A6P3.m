@@ -80,15 +80,15 @@ rOprime = zeros(length(state),3); % preallocate for speed
 rdotOprime = zeros(length(state),3);
 rddotOprime = zeros(length(state),3);
 for i = 1:length(state)
-    rOprime(i,1) = state{i}.q(1); % x value of rOprime
-    rOprime(i,2) = state{i}.q(2); % y value of rOprime
-    rOprime(i,3) = state{i}.q(3); % z value of rOprime
-    rdotOprime(i,1) = state{i}.qdot(1); % xdot value of rOprime
-    rdotOprime(i,2) = state{i}.qdot(2); % ydot value of rOprime
-    rdotOprime(i,3) = state{i}.qdot(3); % zdot value of rOprime
-    rddotOprime(i,1) = state{i}.qddot(1); % xddot value of rOprime
-    rddotOprime(i,2) = state{i}.qddot(2); % yddot value of rOprime
-    rddotOprime(i,3) = state{i}.qddot(3); % zddot value of rOprime
+    rOprime(i,1) = state{i}.r(1); % x value of rOprime
+    rOprime(i,2) = state{i}.r(2); % y value of rOprime
+    rOprime(i,3) = state{i}.r(3); % z value of rOprime
+    rdotOprime(i,1) = state{i}.rdot(1); % xdot value of rOprime
+    rdotOprime(i,2) = state{i}.rdot(2); % ydot value of rOprime
+    rdotOprime(i,3) = state{i}.rdot(3); % zdot value of rOprime
+    rddotOprime(i,1) = state{i}.rddot(1); % xddot value of rOprime
+    rddotOprime(i,2) = state{i}.rddot(2); % yddot value of rOprime
+    rddotOprime(i,3) = state{i}.rddot(3); % zddot value of rOprime
 end
 
 % plot position, velocity, acceleration of Oprime
@@ -135,9 +135,9 @@ rQddot      = zeros(length(state),3);
 
 for i = 1:length(state)
     % get pOprime
-    p     = state{i}.q(4:7); 
-    pdot  = state{i}.qdot(4:7); 
-    pddot = state{i}.qddot(4:7); 
+    p     = state{i}.p(1:4); 
+    pdot  = state{i}.pdot(1:4); 
+    pddot = state{i}.pddot(1:4); 
     
     % derive rQ
     A = utility.p2A(p);

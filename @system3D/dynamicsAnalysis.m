@@ -12,40 +12,40 @@ function state = dynamicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform dyna
 %
 % output:
 %   state = cell array of states of system
-%
-% to further clarify, each cell of state is a structure,
-% defining the state of system. For example, at timePoint 1:
-%   state{1}.time
-%   state{1}.q
-%   state{1}.qdot
-%   state{1}.qddot
-%   state{1}.rForce
-%   state{1}.rTorque
 
-if sys.nDOF == 0
-    error('For  dynamics analysis, the total number of degrees of freedom must be greater than zero.');
-end
+% if sys.nDOF == 0
+%     error('For  dynamics analysis, the total number of degrees of freedom must be greater than zero.');
+% end
 if ~exist('timeStep','var') || isempty(timeStep)
     timeStep = 10^-2; % default time step
 end
 
 timeGrid = timeStart:timeStep:timeEnd; % establish time grid
-
 state = cell(length(timeGrid),1); % preallocate for saved state
 
+
+%%%%%%%%%%%
 % check initial conditions (ME751_f2016, slide 41, lecture 10/17/16)
+iT = 1; % at timeStart
+sys.setSystemTime(timeGrid(iT)); % set system time 
 sys.checkInitialConditions();
 sys.findInitialAccelerations();
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% START WORK HERE. NEXT STEP, GO THROUGH DYNAMICS FLOW CHARTS. YOU CAN DO IT SAMUEL!
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% store initial system state: (iT = 1)
+state{1} = sys.getSystemState();
+
+%%%%%%%%%%% GOOD WITH ABOVE
+% using initial conditions, 
+% find first time step using Quasi-Newton method and BDF of order 1
+iT = 2; % first integration step
+sys.setSystemTime(timeGrid(iT)); % set system time 
+sys.QN_BDF1(timeStep,state{1}); % send initial state
+state{2} = sys.getSystemState();
+
+return
 
 % iterate throughout the time grid:
-for iT = 1:length(timeGrid)
+for iT = 3:length(timeGrid)
     t = timeGrid(iT); % current time step
     sys.setSystemTime(t); % set system time 
     
