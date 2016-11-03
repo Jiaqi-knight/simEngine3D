@@ -12,6 +12,7 @@ classdef body3D < handle
         system;   % parent system3D object to which this body is a member. 
                   % useful because it containts system time and gravity
         ID;       % body ID number
+        color;    % rgb, used for plotting
         r;        % = [x;y;z] location of body RF from GLOBAL RF        
         p;        % = [e0;e1;e2;e3] euler parameters of BODY RF
         rdot;     % = [3x1] time derivative of position r
@@ -61,6 +62,7 @@ classdef body3D < handle
             % instantiate body properties
             body.system = system;
             body.ID = ID;
+            body.color = [0,0,0]; % default color is black.
             body.r = r;
             body.p = p;
             body.rdot = rdot;
@@ -81,7 +83,7 @@ classdef body3D < handle
                 aBar = [0;0;0]; % point located at origin of body
             end
             body.point{body.nPoints+1} = aBar;
-        end 
+        end
         function setMass(body,mass) % specify body mass
             body.m = mass;
         end

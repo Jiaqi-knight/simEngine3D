@@ -107,4 +107,3 @@ title('Reaction Torque of Pendulum')
 xlabel('Time (sec)')
 ylabel('Torque (N-m)')
 
-

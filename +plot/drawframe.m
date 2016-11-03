@@ -50,28 +50,30 @@ z = A*unitZ;
 switch style
     case 0 
         % default,rgb frames
-        quiver3(r(1),r(2),r(3),x(1),x(2),x(3),'Color',[1,0,0]);
-        quiver3(r(1),r(2),r(3),y(1),y(2),y(3),'Color',[0,1,0]);
-        quiver3(r(1),r(2),r(3),z(1),z(2),z(3),'Color',[0,0,1]);
+        lineWidth = 2;
+        quiver3(r(1),r(2),r(3),x(1),x(2),x(3),'Color',[1,0,0],'LineWidth',lineWidth);
+        quiver3(r(1),r(2),r(3),y(1),y(2),y(3),'Color',[0,1,0],'LineWidth',lineWidth);
+        quiver3(r(1),r(2),r(3),z(1),z(2),z(3),'Color',[0,0,1],'LineWidth',lineWidth);
     case 1
         % use black for frame color
         color = [0,0,0];
-        lineWidth = 2;
+        lineWidth = 4;
         quiver3(r(1),r(2),r(3),x(1),x(2),x(3),'Color',color,'LineWidth',lineWidth);
         quiver3(r(1),r(2),r(3),y(1),y(2),y(3),'Color',color,'LineWidth',lineWidth);
         quiver3(r(1),r(2),r(3),z(1),z(2),z(3),'Color',color,'LineWidth',lineWidth);
         
         % label the frame axes
-        Atext = A+scale*0.05;
+        Atext = scale*A +0.05;
         text(Atext(1,1),Atext(2,1),Atext(3,1), 'X');
         text(Atext(1,2),Atext(2,2),Atext(3,2), 'Y');
         text(Atext(1,3),Atext(2,3),Atext(3,3), 'Z');
     case 2
-        % use DarkSlateGray for frame color
-        color = [0.1836,0.3086,0.3086];
-        quiver3(r(1),r(2),r(3),x(1),x(2),x(3),'Color',color);
-        quiver3(r(1),r(2),r(3),y(1),y(2),y(3),'Color',color);
-        quiver3(r(1),r(2),r(3),z(1),z(2),z(3),'Color',color);
+        % use Saddlebrown for frame color
+        color = [0.5430,    0.2695,    0.0742];
+        lineWidth = 2;
+        quiver3(r(1),r(2),r(3),x(1),x(2),x(3),'Color',color,'LineWidth',lineWidth);
+        quiver3(r(1),r(2),r(3),y(1),y(2),y(3),'Color',color,'LineWidth',lineWidth);
+        quiver3(r(1),r(2),r(3),z(1),z(2),z(3),'Color',color,'LineWidth',lineWidth);
 end
 
 if hchek == 0

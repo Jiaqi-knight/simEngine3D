@@ -85,14 +85,12 @@ timeStart = 0; %seconds
 timeEnd =  10;
 timeStep = 10^-2; %10^-3;
 
-
-
-
 state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep);
 
-return
-%save('state_A7.mat','state')
+
+%save('state_A8.mat','state')
 %load('state_A7.mat')
+disp('done')
 
 %% PLOT REACTION TORQUE
 
