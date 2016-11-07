@@ -79,6 +79,7 @@ sys.body{2}.addPoint([0;-1;0]); % body 2, point 5
 sys.body{3}.addPoint([-1;0;0]); % body 3, point 1
 sys.body{3}.addPoint([0;0;0]); % body 3, point 2
 sys.body{3}.addPoint([0;0;1]); % body 3, point 3
+sys.body{3}.addPoint([1;0;0]); % body 3, point 4, just for looks
 
 
 %% PLOT THE SYSTEM in 3D %%
@@ -235,4 +236,8 @@ plot(time,violation)
 title('Norm-2 Violation of the Velocity Constraints (Rev Joint: Body 1 & Body 2)')
 xlabel('Time (sec)')
 ylabel('Violation (m/s)')
+
+%% play animation of the dynamics analysis
+plot.animateSystem(sys,state);
+
 
