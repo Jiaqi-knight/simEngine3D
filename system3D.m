@@ -282,7 +282,7 @@ classdef system3D < handle
             %   state = cell array of states of system
             
             if sys.nDOF == 0
-                warning('For  dynamics analysis, the total number of degrees of freedom must be greater than zero.');
+                warning('For  dynamics analysis, the total number of degrees of freedom should be greater than zero.');
             end
             if ~exist('timeStep','var') || isempty(timeStep)
                 timeStep = 10^-2; % default time step
