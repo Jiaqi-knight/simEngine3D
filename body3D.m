@@ -62,7 +62,7 @@ classdef body3D < handle
             % instantiate body properties
             body.system = system;
             body.ID = ID;
-            body.color = [0,0,0]; % default color is black.
+            body.color = [0.6602, 0.6602, 0.6602]; % default color is dark gray.
             body.r = r;
             body.p = p;
             body.rdot = rdot;

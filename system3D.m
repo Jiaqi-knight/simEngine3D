@@ -281,9 +281,9 @@ classdef system3D < handle
             % output:
             %   state = cell array of states of system
             
-            % if sys.nDOF == 0
-            %     error('For  dynamics analysis, the total number of degrees of freedom must be greater than zero.');
-            % end
+            if sys.nDOF == 0
+                warning('For  dynamics analysis, the total number of degrees of freedom must be greater than zero.');
+            end
             if ~exist('timeStep','var') || isempty(timeStep)
                 timeStep = 10^-2; % default time step
             end
@@ -306,7 +306,7 @@ classdef system3D < handle
             % find first time step using Quasi-Newton method and BDF of order 1
             iT = 2; % first integration step
             sys.setSystemTime(timeGrid(iT)); % set system time
-            sys.QN_BDF1(timeStep,state{1}); % send initial state
+            sys.QN_BDF1_check(timeStep,state{1}); % send initial state
             state{2} = sys.getSystemState();
             disp(['Dynamics analysis completed for t = ' num2str(sys.time) ' sec.'])
             
@@ -734,6 +734,147 @@ classdef system3D < handle
             sys.lambda = accel(7*sys.nFreeBodies+sys.rPDOF+1:end); % update lambda
             sys.calculateReactions(); % derive sys.rForce, sys.rTorque
         end
+        function QN_BDF1_check(sys,h,state1) % Quasi-Newton using BDF order 1
+            
+            %%%%%%%%%%%%%%%%%%
+             % useful constants
+            sys.constructMMatrix();  % update M
+            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z3 = zeros(sys.nFreeBodies);
+            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
+            Z5 = zeros(sys.rKDOF);
+            
+            %%%%%%%%%%%%%%%%%%
+            % Steps:
+            % Find PSI
+            % find Ystar
+            % find G(Ystar)
+            % find Ystar + delta
+            % find G( Ystar + delta )
+            % find (G(Ystar+delta) - g(Ystar))/delta
+            % compare with original PSI
+            
+            %%%%%%%%%%%%%%%%%%
+            % Find PSI
+            % BDF constants
+            beta0  =  1;
+            alpha1 = -1;
+            Crdot   = -alpha1*state1.rdot;
+            Cpdot   = -alpha1*state1.pdot;
+            Cr      = -alpha1*state1.r + beta0*h*Crdot;
+            Cp      = -alpha1*state1.p + beta0*h*Cpdot;
+            % initial guesses
+            rddot   = state1.rddot;
+            pddot   = state1.pddot;
+            lambdaP = state1.lambdaP;
+            lambda  = state1.lambda;
+            %compute position and velocity using BDF and most recent accelerations
+            r     = Cr + beta0^2*h^2*rddot;
+            p     = Cp + beta0^2*h^2*pddot;
+            rdot  = Crdot + beta0*h*rddot;
+            pdot  = Cpdot + beta0*h*pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            %compute PSI (jacobian)
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            PSI = [    sys.M         Z1'     Z2'  sys.phi_r';
+                          Z1     sys.Jp   sys.P'  sys.phi_p';
+                          Z2      sys.P      Z3          Z4';
+                   sys.phi_r  sys.phi_p      Z4          Z5];
+               
+               
+            %%%%%%%%%%%%%%%%%%
+            % Find OG PSI
+            r     = state1.r;
+            p     = state1.p;
+            rdot  = state1.rdot;
+            pdot  = state1.pdot;
+            rddot = state1.rddot;
+            pddot = state1.pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            %compute PSI (jacobian)
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            PSIog = [    sys.M         Z1'     Z2'  sys.phi_r';
+                          Z1     sys.Jp   sys.P'  sys.phi_p';
+                          Z2      sys.P      Z3          Z4';
+                   sys.phi_r  sys.phi_p      Z4          Z5];
+            
+            %%%%%%%%%%%%%%%%%%
+            % find Ystar
+            r     = state1.r;
+            p     = state1.p;
+            rdot  = state1.rdot;
+            pdot  = state1.pdot;
+            rddot = state1.rddot;
+            pddot = state1.pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % find G(Ystar)
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            sys.constructPMatrix();         % update P
+            sys.constructFVector();         % update F
+            sys.constructTauHatVector();    % update TauHat
+            G = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
+                sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
+                1/(beta0^2*h^2)*sys.phiP;
+                1/(beta0^2*h^2)*sys.phi];
+            
+            %%%%%%%%%%%%%%%%%%
+            % find Ystar + delta
+            delta = 10^-3;
+            r     = state1.r;
+            p     = state1.p;
+            rdot  = state1.rdot;
+            pdot  = state1.pdot;
+            rddot = state1.rddot;
+            pddot = state1.pddot;
+            lambda(5) = lambda(5)+delta;
+            
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % find G( Ystar + delta )
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            sys.constructPMatrix();         % update P
+            sys.constructFVector();         % update F
+            sys.constructTauHatVector();    % update TauHat
+            Gdelta = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
+                sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
+                1/(beta0^2*h^2)*sys.phiP;
+                1/(beta0^2*h^2)*sys.phi];
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % find (G(Ystar+delta) - g(Ystar))/delta
+            FD = (Gdelta-G)./delta;
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % compare with original PSI
+            PSIog
+            PSI
+            FD
+            r
+            
+            
+            
+            
+            
+            
+           
+
+        end
         function QN_BDF1(sys,h,state1) % Quasi-Newton using BDF order 1
             % Perform Quasi-Newton iteration using
             % Backwards Difference Formula, Order 1
@@ -807,7 +948,7 @@ classdef system3D < handle
                     sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
                     1/(beta0^2*h^2)*sys.phiP;
                     1/(beta0^2*h^2)*sys.phi];
-                
+
                 %%%%%%%%%%%
                 % STEP 3 : Solve nonlinear system to get correction deltaZ. 
                 % Use a QUASI-NEWTON iteration matrix (psi).
