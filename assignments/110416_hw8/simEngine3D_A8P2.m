@@ -111,7 +111,7 @@ tic
 state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep);
 toc
 
-%save('state_A8.mat','state')
+%save('state_A8P2.mat','state')
 %load('state_A7.mat')
 disp('done')
 
