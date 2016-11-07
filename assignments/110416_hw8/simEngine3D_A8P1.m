@@ -77,12 +77,12 @@ sys.addGravityForces();
 timeStart = 0; %seconds
 timeEnd =  10;
 timeStep = 10^-2; %10^-3;
-
+tic
 state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep);
-
+toc
 %save('state_A8.mat','state')
 %load('state_A7.mat')
-disp('done')
+disp('done with dynamics analysis.')
 
 %% PLOT REACTION TORQUE
 
@@ -101,5 +101,6 @@ plot(time,torque)
 title('Reaction Torque of Pendulum')
 xlabel('Time (sec)')
 ylabel('Torque (N-m)')
+axis([0 10 -300 300])
 
 
