@@ -299,27 +299,35 @@ classdef system3D < handle
             sys.checkInitialConditions();
             sys.findInitialAccelerations();
             state{1} = sys.getSystemState(); % store initial system state: (iT = 1)
-            disp(['Dynamics analysis completed for t = ' num2str(sys.time) ' sec.'])
+            disp(['Dynamics analysis completed for t = ' num2str(sys.time) ' sec.'])    
             
-            %%%%%%%%%%% GOOD WITH ABOVE
+            % store violation of the velocity constraints (optional)
+            state{1}.velocityViolation = sys.violationVelocityConstraints();
+            
+            %%%%%%%%%%% 
             % using initial conditions,
             % find first time step using Quasi-Newton method and BDF of order 1
             iT = 2; % first integration step
             sys.setSystemTime(timeGrid(iT)); % set system time
-            sys.QN_BDF1(timeStep,state{1}); % send initial state
+            sys.BDF_QN(1,timeStep,state{1}); % ORDER 1 BDF, Quasi-Newton method, send initial state
             state{2} = sys.getSystemState();
             disp(['Dynamics analysis completed for t = ' num2str(sys.time) ' sec.'])
+            
+            % store violation of the velocity constraints (optional)
+            state{2}.velocityViolation = sys.violationVelocityConstraints();
             
             % iterate throughout the time grid:
             for iT = 3:length(timeGrid)
                 t = timeGrid(iT); % current time step
                 sys.setSystemTime(t); % set system time
-                sys.QN_BDF2(timeStep,state{iT-1},state{iT-2}); % send initial state
+                sys.BDF_QN(2,timeStep,state{iT-1},state{iT-2}); % ORDER 2 BDF, Quasi-Newton method, send past two states
                 state{iT} = sys.getSystemState();
                 
                 disp(['Dynamics analysis completed for t = ' num2str(t) ' sec.']);
+                
+                % store violation of the velocity constraints (optional)
+                state{iT}.velocityViolation = sys.violationVelocityConstraints();
             end
-            
         end %dynamicsAnalysis
         function addGravityForces(sys) % add gravity force to body
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
@@ -378,7 +386,6 @@ classdef system3D < handle
         end
         function constructPhi(sys) % construct phi matrix (kinematic & driving constraints)
             % phi = [(rKDOF) x 1]
-            
             sys.phi = zeros(sys.rKDOF,1); % initialize phi for speed
             row = 1;
             for i = 1:(sys.nConstraints-sys.rPDOF) % only kinematic and driving constraints
@@ -734,10 +741,9 @@ classdef system3D < handle
             sys.lambda = accel(7*sys.nFreeBodies+sys.rPDOF+1:end); % update lambda
             sys.calculateReactions(); % derive sys.rForce, sys.rTorque
         end
-        function QN_BDF1(sys,h,state1) % Quasi-Newton using BDF order 1
+        function BDF_QN(sys,orderNum,h,varargin) % Quasi-Newton using BDF of the order specified
             % Perform Quasi-Newton iteration using
-            % Backwards Difference Formula, Order 1
-            % (this is also known as the Backwards Euler Method)
+            % Backwards Difference Formula
             % see ME751_f2016, slides 18-22, 10/14/16
             % also see ME751_f2016, slide 43, 10/17/16
             % 
@@ -745,25 +751,53 @@ classdef system3D < handle
             %
             % INPUTS:
             %      h : step size, in seconds
-            % state1 : structure of system values at previous time step, t(n-1)
+            % varargin: a collection of states of the system, in order from
+            % most recent to least recent...
+            %   state1 : structure of system values at previous time step, t(n-1)
+            %   state2 : structure of system values at previous time step, t(n-2)
             
             % solver parameters
-            maxIterations = 10; % 50;
-            tolerance = 1e-8;
+            maxIterations = 50; % 50;
+            tolerance = 1e-2; %1e-8;
             
-            % BDF constants
-            beta0  =  1;
-            alpha1 = -1;
+            switch orderNum % BDF order number
+                case 1 % Order 1: (this is also known as the Backwards Euler Method)
+                    % BDF constants
+                    beta0  =  1;
+                    alpha1 = -1;
+                    state1 = varargin{1}; % system state from previous time step, t(n-1)
+                    % Constant terms from slide 30-31, lecture 10/14/16
+                    Crdot   = -alpha1*state1.rdot;
+                    Cpdot   = -alpha1*state1.pdot;
+                    Cr      = -alpha1*state1.r + beta0*h*Crdot;
+                    Cp      = -alpha1*state1.p + beta0*h*Cpdot;
+                
+                case 2 % order 2
+                    % BDF constants
+                    beta0  =  2/3;
+                    alpha1 = -4/3;
+                    alpha2 =  1/3;
+                    state1 = varargin{1}; % system state from previous time step, t(n-1)
+                    state2 = varargin{2}; % system state from previous time step, t(n-2)
+                    % Constant terms from slide 30-31, lecture 10/14/16
+                    Crdot   = -alpha1*state1.rdot + -alpha2*state2.rdot;
+                    Cpdot   = -alpha1*state1.pdot + -alpha2*state2.pdot;
+                    Cr      = -alpha1*state1.r + -alpha2*state2.r + beta0*h*Crdot;
+                    Cp      = -alpha1*state1.p + -alpha2*state2.p + beta0*h*Cpdot;
+                otherwise
+                    error(['BDF of Order ' orderNum ' not implemented yet.']);
+            end
+                
             
             %%%%%%%%%%%
             % STEP 0 : prime new time step
             % (follow Iteration steps from slide 43, 10/17/16)
             
-            % Constant terms from slide 30-31, lecture 10/14/16
-            Crdot   = -alpha1*state1.rdot;
-            Cpdot   = -alpha1*state1.pdot;
-            Cr      = -alpha1*state1.r + beta0*h*Crdot;
-            Cp      = -alpha1*state1.p + beta0*h*Cpdot;
+%             % Constant terms from slide 30-31, lecture 10/14/16
+%             Crdot   = -alpha1*state1.rdot;
+%             Cpdot   = -alpha1*state1.pdot;
+%             Cr      = -alpha1*state1.r + beta0*h*Crdot;
+%             Cp      = -alpha1*state1.p + beta0*h*Cpdot;
             
             % initial guesses
             rddot   = state1.rddot;
@@ -818,12 +852,14 @@ classdef system3D < handle
                                   Z2      sys.P      Z3          Z4';
                            sys.phi_r  sys.phi_p      Z4          Z5];
                 %end
-                deltaZ(:,nu) = psi\-g; % osciallations at deltaZ 1, 9, 12, 13
+                deltaZ = psi\-g; % for recording instances of deltaZ
+                %deltaZ(:,nu) = psi\-g; % for recording instances of deltaZ
                 
                 %%%%%%%%%%%
                 % STEP 4 : Improve the quality of the approximate solution
                 Z_old = [rddot; pddot; lambdaP; lambda];
-                Z = Z_old + deltaZ(:,nu);
+                Z = Z_old + deltaZ;
+                %Z = Z_old + deltaZ(:,nu); % for recording instances of deltaZ
                 rddot = Z(1:length(rddot));
                 pddot = Z(length(rddot)+1:length(rddot)+length(pddot));
                 lambdaP = Z(length(rddot)+length(pddot)+1:length(rddot)+length(pddot)+length(lambdaP));
@@ -833,14 +869,12 @@ classdef system3D < handle
                 % STEP 5 : if the norm of the correction is small enough,
                 % go to step 6. Otherwise
                 nu = nu + 1;
-                %norm(deltaZ)
+                
                 if norm(deltaZ) < tolerance
                     break;
                 end
             end
             if nu >= maxIterations % notify of failed convergence
-                
-                
                 warning(['Did not converge in Quasi-Newton iteration, BDF1. Time = ' num2str(sys.time)]);
                 disp('but we are going on, baby!');
             end
@@ -861,132 +895,12 @@ classdef system3D < handle
             % At this point you just finished one integration step. Life is
             % good. Now repeat this for another time step
         end
-        function QN_BDF2(sys,h,state1,state2) % Quasi-Newton using BDF order 1
-            % Perform Quasi-Newton iteration using
-            % Backwards Difference Formula, Order 2
-            % (this is also known as the Backwards Euler Method)
-            % see ME751_f2016, slides 18-22, 10/14/16
-            % also see ME751_f2016, slide 43, 10/17/16
-            % 
-            % Note: This function only solves one intergration step, at the current system time
-            %
-            % INPUTS:
-            %      h : step size, in seconds
-            % state1 : structure of system values at previous time step, t(n-1)
-            % state2 : structure of system values at 2nd previous time step, t(n-2)
-            
-            % solver parameters
-            maxIterations = 10; % 50;
-            tolerance = 1e-8;
-            
-            % BDF constants
-            beta0  =  2/3;
-            alpha1 = -4/3;
-            alpha2 =  1/3;
-            
-            %%%%%%%%%%%
-            % STEP 0 : prime new time step
-            % (follow Iteration steps from slide 43, 10/17/16)
-            
-            % Constant terms from slide 30-31, lecture 10/14/16
-            Crdot   = -alpha1*state1.rdot + -alpha2*state2.rdot;
-            Cpdot   = -alpha1*state1.pdot + -alpha2*state2.pdot;
-            Cr      = -alpha1*state1.r + -alpha2*state2.r + beta0*h*Crdot;
-            Cp      = -alpha1*state1.p + -alpha2*state2.p + beta0*h*Cpdot;
-            
-            % initial guesses
-            rddot   = state1.rddot;
-            pddot   = state1.pddot;
-            lambdaP = state1.lambdaP;
-            lambda  = state1.lambda;
-            
-
-            % useful constants
-            sys.constructMMatrix();  % update M
-            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z3 = zeros(sys.nFreeBodies);
-            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
-            Z5 = zeros(sys.rKDOF);
-            
-            % Quasi-Newton Iteration Method
-            nu = 1; % iteration counter
-            while nu < maxIterations
-                %%%%%%%%%%%
-                % STEP 1 : compute position and velocity using BDF and most recent accelerations
-                r     = Cr + beta0^2*h^2*rddot;
-                p     = Cp + beta0^2*h^2*pddot;
-                rdot  = Crdot + beta0*h*rddot;
-                pdot  = Cpdot + beta0*h*pddot;
-                sys.updateSystem([r; p],[rdot; pdot],[]);
-                
-                %%%%%%%%%%%
-                % STEP 2 : compute the residual (g) in nonlinear system, which
-                % is a function of most recent accelerations
-                % (see slide 26, 10/17/16)
-                sys.constructPhiF();            % update phi & phiP
-                sys.constructJpMatrix();        % update J^p
-                sys.constructPhi_q();           % update phi_r & phi_p
-                sys.constructPMatrix();         % update P
-                sys.constructFVector();         % update F
-                sys.constructTauHatVector();    % update TauHat
-                
-                % descretized equations of motion
-                g = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
-                    sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
-                    1/(beta0^2*h^2)*sys.phiP;
-                    1/(beta0^2*h^2)*sys.phi];
-                
-                %%%%%%%%%%%
-                % STEP 3 : Solve nonlinear system to get correction deltaZ. 
-                % Use a QUASI-NEWTON iteration matrix (psi).
-                % (see slide 26, 10/17/16)
-                if nu == 1
-                    psi = [    sys.M         Z1'     Z2'  sys.phi_r';
-                                  Z1     sys.Jp   sys.P'  sys.phi_p';
-                                  Z2      sys.P      Z3          Z4';
-                           sys.phi_r  sys.phi_p      Z4          Z5];
-                end
-                deltaZ(:,nu) = psi\-g; % osciallations at deltaZ 1, 9, 12, 13
-                
-                %%%%%%%%%%%
-                % STEP 4 : Improve the quality of the approximate solution
-                Z_old = [rddot; pddot; lambdaP; lambda];
-                Z = Z_old + deltaZ(:,nu);
-                rddot = Z(1:length(rddot));
-                pddot = Z(length(rddot)+1:length(rddot)+length(pddot));
-                lambdaP = Z(length(rddot)+length(pddot)+1:length(rddot)+length(pddot)+length(lambdaP));
-                lambda  = Z(length(rddot)+length(pddot)+length(lambdaP)+1:end);
-                
-                %%%%%%%%%%%
-                % STEP 5 : if the norm of the correction is small enough,
-                % go to step 6. Otherwise
-                nu = nu + 1;
-                %norm(deltaZ)
-                if norm(deltaZ) < tolerance
-                    break;
-                end
-            end
-            if nu >= maxIterations % notify of failed convergence
-                error(['Did not converge in Quasi-Newton iteration, BDF2. Time = ' num2str(sys.time)]);
-                disp('but we are going on, baby!');
-            end
-            
-            %%%%%%%%%%%
-            % STEP 6 : Accep the acclerations and lambdas computed in step
-            % 4 as the solutions. Using the acclerations, find position and
-            % velocities.
-            r     = Cr + beta0^2*h^2*rddot;
-            p     = Cp + beta0^2*h^2*pddot;
-            rdot  = Crdot + beta0*h*rddot;
-            pdot  = Cpdot + beta0*h*pddot;
-            sys.updateSystem([r; p],[rdot; pdot],[rddot; pddot]); % final system state
-            sys.lambdaP = lambdaP;
-            sys.lambda = lambda;
-            sys.calculateReactions(); % derive sys.rForce, sys.rTorque
-            
-            % At this point you just finished one integration step. Life is
-            % good. Now repeat this for another time step
+        function violation = violationVelocityConstraints(sys)
+            % evaluate violation of the velocity constraints
+            % see slide 41 for lecture 10/17/16
+            sys.constructNuF();
+            vel = sys.phi_r*sys.rdot+sys.phi_p*sys.pdot;
+            violation = vel-sys.nu;
         end
         function calculateReactions(sys) % calculate reaction forces and torques
             % From ME751_f2016 slide 8 of lecture 10/10/16

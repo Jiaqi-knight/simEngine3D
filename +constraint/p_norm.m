@@ -33,7 +33,11 @@ classdef p_norm < handle
         function phi = get.phi(cons) % value of the expression of the constraint PHI^p_norm
             % from ME751_f2016 slide 24 from lecture 9/28/16
             % phi : p'*p-1 = 0 = [1x1]
-            phi = cons.bodyi.p'*cons.bodyi.p - 1;
+            %phi = cons.bodyi.p'*cons.bodyi.p - 1;
+            
+            % for some reason, phiP must be scaled by 0.5, as is
+            % designated in lecture 10/17/16, slide 17
+            phi = 0.5*cons.bodyi.p'*cons.bodyi.p - 0.5;
         end
         function nu = get.nu(cons) % right-hand side of the velocity equation
             % from ME751_f2016 slide 25 from lecture 9/28/16
