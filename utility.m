@@ -94,6 +94,16 @@ classdef utility
             e = p(2:4);
             G = [-e, -utility.tilde(e)+e0*eye(3)];
         end
+        function K = Kmatrix(abar,b) % helper K matrix, (r-p formulation?)
+            % from ME751_f2016 slide 35 from lecture 10/17/16
+            % inputs:
+            %   abar : [3x1] vector
+            %      b : [3x1] vector
+            % outputs
+            %      K : [4x4] matrix
+            K = 2*[abar'*b                  abar'*utility.tilde(b);
+                   utility.tilde(abar)*b    abar*b'+b*abar'-abar'*b*eye(3)];
+        end
         function dij = dij(bodyi,Pi,bodyj,Qj) % vector between points Pi and Qj
             dij = bodyj.r+bodyj.A*bodyj.point{Qj} + -bodyi.r + -bodyi.A*bodyi.point{Pi};
         end

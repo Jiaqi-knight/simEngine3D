@@ -266,7 +266,7 @@ classdef system3D < handle
                 disp(['Inverse dynamics analysis completed for t = ' num2str(t) ' sec.']);
             end
         end
-        function state = dynamicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform dynamics analysis
+        function state = dynamicsAnalysis(sys,timeStart,timeEnd,timeStep,newtonMethod) % perform dynamics analysis
             % perform dynamics analysis on the system. System must be not be
             % fully constrained (nDOF > 0).
             %
@@ -277,6 +277,7 @@ classdef system3D < handle
             %   timeStart : the starting time of simulation, usually 0
             %   timeEnd   : ending time of simulation
             %   timeStep  : step size of time during stimulation (optional)
+            %   newtonMethod: {'NR','MN','QN'}
             %
             % output:
             %   state = cell array of states of system
@@ -286,6 +287,9 @@ classdef system3D < handle
             end
             if ~exist('timeStep','var') || isempty(timeStep)
                 timeStep = 10^-2; % default time step
+            end
+            if ~exist('newtonMethod','var') || isempty(newtonMethod)
+                newtonMethod = 'QN'; % default newton method is Quasi-Newton
             end
             
             timeGrid = timeStart:timeStep:timeEnd; % establish time grid
@@ -309,7 +313,7 @@ classdef system3D < handle
             % find first time step using Quasi-Newton method and BDF of order 1
             iT = 2; % first integration step
             sys.setSystemTime(timeGrid(iT)); % set system time
-            sys.BDF_QN(1,timeStep,state{1}); % ORDER 1 BDF, Quasi-Newton method, send initial state
+            sys.BDF_dynamicsAnalysis(1,newtonMethod,timeStep,state{1}); % ORDER 1 BDF, Quasi-Newton method, send initial state
             state{2} = sys.getSystemState();
             disp(['Dynamics analysis completed for t = ' num2str(sys.time) ' sec.'])
             
@@ -320,7 +324,7 @@ classdef system3D < handle
             for iT = 3:length(timeGrid)
                 t = timeGrid(iT); % current time step
                 sys.setSystemTime(t); % set system time
-                sys.BDF_QN(2,timeStep,state{iT-1},state{iT-2}); % ORDER 2 BDF, Quasi-Newton method, send past two states
+                sys.BDF_dynamicsAnalysis(2,newtonMethod,timeStep,state{iT-1},state{iT-2}); % ORDER 2 BDF, Quasi-Newton method, send past two states
                 state{iT} = sys.getSystemState();
                 
                 disp(['Dynamics analysis completed for t = ' num2str(t) ' sec.']);
@@ -384,6 +388,518 @@ classdef system3D < handle
                 end
             end
         end
+        function positionAnalysis(sys,tolerance,maxIterations) % position analysis of system
+            % Performs kinematic position analysis using Newton-Raphson method
+            
+            if ~exist('tolerance','var') || isempty(tolerance)
+                tolerance = 1e-9;  % default tolerance
+            end
+            if ~exist('maxIterations','var') || isempty(maxIterations)
+                maxIterations = 50; % default maximum iterations
+            end
+             
+            guessQ = sys.q; % initial guess
+            
+            for i = 1:maxIterations % iterate
+                sys.constructPhiF();   % get constraint matrix
+                sys.constructPhiF_q(); % get jacobian
+                correction = sys.phiF_q\sys.phiF; % correction 
+                guessQ = guessQ - correction; % update guess
+                
+                % update bodies
+                sys.updateSystem(guessQ,[],[]);
+                
+                if norm(correction) < tolerance %check for convergence
+                    break;
+                end
+            end
+            if i >= maxIterations
+                error('Failed to converge position analysis, the maximum number of iterations is reached')
+            end
+            
+        end
+        function velocityAnalysis(sys) % solve for velocities of the system
+            % compute velocity and derivative of euler parameters
+            % for a given time (t)
+            
+            % calculate RHS of velocity equation
+            sys.constructNuF();
+            
+            % find jacobian of phi
+            sys.constructPhiF_q();
+            
+            % solve for velocities (qdot)
+            qdot = sys.phiF_q\sys.nuF;
+            
+            % update bodies
+            sys.updateSystem([],qdot,[]);
+        end
+        function accelerationAnalysis(sys) % solve for accelerations of the system
+            % compute acceleration and 2nd derivative of euler parameters
+            % for a given time (t)
+            
+            % calculate RHS of acceleration equation
+            sys.constructGammaHatF();
+            
+            % already found jacobian of phi
+            
+            % solve for accelerations (qddot)
+            qddot = sys.phiF_q\sys.gammaHatF;
+            
+            % update bodies
+            sys.updateSystem([],[],qddot);
+        end
+        function findInitialAccelerations(sys) % find initial conditions for acceleration
+            % from ME751_f2016, slide 42 from lecture 10/17/2016
+            
+            %%%%%%
+            % fill out LHS matrix
+            sys.constructMMatrix();  % update M
+            sys.constructJpMatrix(); % update J^p
+            sys.constructPhiF();     % update phi & phiP
+            sys.constructPhi_q();    % update phi_r & phi_p
+            sys.constructPMatrix();  % update P
+            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z3 = zeros(sys.nFreeBodies);
+            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
+            Z5 = zeros(sys.rKDOF);
+            LHS = [    sys.M         Z1'     Z2'  sys.phi_r';
+                          Z1     sys.Jp   sys.P'  sys.phi_p';
+                          Z2      sys.P      Z3          Z4';
+                   sys.phi_r  sys.phi_p      Z4          Z5];
+            
+            %%%%%%
+            % fill out RHS matrix
+            sys.constructFVector();       % update F
+            sys.constructTauHatVector();  % update TauHat
+            sys.constructGammaHatF();     % gammaHat and gammaHatF
+            RHS = [sys.F; sys.TauHat; sys.gammaHatP; sys.gammaHat];
+            
+            %%%%%%
+            % solve for initial accelerations
+            accel = LHS\RHS;
+            sys.updateSystem([],[],accel(1:7*sys.nFreeBodies)); % update qddot
+            sys.lambdaP = accel(7*sys.nFreeBodies+1:7*sys.nFreeBodies+sys.rPDOF); % update lambdaP
+            sys.lambda = accel(7*sys.nFreeBodies+sys.rPDOF+1:end); % update lambda
+            sys.calculateReactions(); % derive sys.rForce, sys.rTorque
+        end
+        function QN_BDF1_check(sys,h,state1) % Quasi-Newton using BDF order 1
+            
+            %%%%%%%%%%%%%%%%%%
+             % useful constants
+            sys.constructMMatrix();  % update M
+            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z3 = zeros(sys.nFreeBodies);
+            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
+            Z5 = zeros(sys.rKDOF);
+            
+            %%%%%%%%%%%%%%%%%%
+            % Steps:
+            % Find PSI
+            % find Ystar
+            % find G(Ystar)
+            % find Ystar + delta
+            % find G( Ystar + delta )
+            % find (G(Ystar+delta) - g(Ystar))/delta
+            % compare with original PSI
+            
+            %%%%%%%%%%%%%%%%%%
+            % Find PSI
+            % BDF constants
+            beta0  =  1;
+            alpha1 = -1;
+            Crdot   = -alpha1*state1.rdot;
+            Cpdot   = -alpha1*state1.pdot;
+            Cr      = -alpha1*state1.r + beta0*h*Crdot;
+            Cp      = -alpha1*state1.p + beta0*h*Cpdot;
+            % initial guesses
+            rddot   = state1.rddot;
+            pddot   = state1.pddot;
+            lambdaP = state1.lambdaP;
+            lambda  = state1.lambda;
+            %compute position and velocity using BDF and most recent accelerations
+            r     = Cr + beta0^2*h^2*rddot;
+            p     = Cp + beta0^2*h^2*pddot;
+            rdot  = Crdot + beta0*h*rddot;
+            pdot  = Cpdot + beta0*h*pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            %compute PSI (jacobian)
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            PSI = [    sys.M         Z1'     Z2'  sys.phi_r';
+                          Z1     sys.Jp   sys.P'  sys.phi_p';
+                          Z2      sys.P      Z3          Z4';
+                   sys.phi_r  sys.phi_p      Z4          Z5];
+               
+               
+            %%%%%%%%%%%%%%%%%%
+            % Find OG PSI
+            r     = state1.r;
+            p     = state1.p;
+            rdot  = state1.rdot;
+            pdot  = state1.pdot;
+            rddot = state1.rddot;
+            pddot = state1.pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            %compute PSI (jacobian)
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            PSIog = [    sys.M         Z1'     Z2'  sys.phi_r';
+                          Z1     sys.Jp   sys.P'  sys.phi_p';
+                          Z2      sys.P      Z3          Z4';
+                   sys.phi_r  sys.phi_p      Z4          Z5];
+            
+            %%%%%%%%%%%%%%%%%%
+            % find Ystar
+            r     = state1.r;
+            p     = state1.p;
+            rdot  = state1.rdot;
+            pdot  = state1.pdot;
+            rddot = state1.rddot;
+            pddot = state1.pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % find G(Ystar)
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            sys.constructPMatrix();         % update P
+            sys.constructFVector();         % update F
+            sys.constructTauHatVector();    % update TauHat
+            G = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
+                sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
+                1/(beta0^2*h^2)*sys.phiP;
+                1/(beta0^2*h^2)*sys.phi];
+            
+            %%%%%%%%%%%%%%%%%%
+            % find Ystar + delta
+            delta = 10^-3;
+            r     = state1.r;
+            p     = state1.p;
+            rdot  = state1.rdot;
+            pdot  = state1.pdot;
+            rddot = state1.rddot;
+            pddot = state1.pddot;
+            lambda(5) = lambda(5)+delta;
+            
+            sys.updateSystem([r; p],[rdot; pdot],[]);
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % find G( Ystar + delta )
+            sys.constructPhiF();            % update phi & phiP
+            sys.constructJpMatrix();        % update J^p
+            sys.constructPhi_q();           % update phi_r & phi_p
+            sys.constructPMatrix();         % update P
+            sys.constructFVector();         % update F
+            sys.constructTauHatVector();    % update TauHat
+            Gdelta = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
+                sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
+                1/(beta0^2*h^2)*sys.phiP;
+                1/(beta0^2*h^2)*sys.phi];
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % find (G(Ystar+delta) - g(Ystar))/delta
+            FD = (Gdelta-G)./delta;
+            
+            
+            %%%%%%%%%%%%%%%%%%
+            % compare with original PSI
+            PSIog
+            PSI
+            FD
+            r
+            
+            
+            
+            
+            
+            
+           
+
+        end
+        function BDF_dynamicsAnalysis(sys,orderNum,newtonMethod,h,varargin) % BDF Solution of the Dynamics Analysis Problem
+            % Backwards Difference Formula, using a newton method
+            % see ME751_f2016, slides 18-22, 10/14/16
+            % also see ME751_f2016, slide 43, 10/17/16
+            % 
+            % Note: This function only solves one intergration step, at the current system time
+            %
+            % INPUTS:
+            %     orderNum : order of BDF method {1,2,3,4,5,6}
+            % newtonMethod : type of newton method used in numerical method {'NR','MN','QN'}
+            %                NR : Newton-Raphson Method
+            %                MN : Modified Newton Method
+            %                QN : Quasi-Newton Method
+            %            h : step size, in seconds
+            %      varargin: a collection of states of the system, in order from
+            %                most recent to least recent...
+            %                varargin{1} : state1 : structure of system values at previous time step, t(n-1)
+            %                varargin{2} : state2 : structure of system values at previous time step, t(n-2)
+            
+            % solver parameters
+            maxIterations = 50; % 50;
+            tolerance = 1e-2; %1e-8;
+            
+            switch orderNum % BDF order number
+                case 1 % Order 1: (this is also known as the Backwards Euler Method)
+                    % BDF constants
+                    beta0  =  1;
+                    alpha1 = -1;
+                    state1 = varargin{1}; % system state from previous time step, t(n-1)
+                    % Constant terms from slide 30-31, lecture 10/14/16
+                    Crdot   = -alpha1*state1.rdot;
+                    Cpdot   = -alpha1*state1.pdot;
+                    Cr      = -alpha1*state1.r + beta0*h*Crdot;
+                    Cp      = -alpha1*state1.p + beta0*h*Cpdot;
+                
+                case 2 % order 2
+                    % BDF constants
+                    beta0  =  2/3;
+                    alpha1 = -4/3;
+                    alpha2 =  1/3;
+                    state1 = varargin{1}; % system state from previous time step, t(n-1)
+                    state2 = varargin{2}; % system state from previous time step, t(n-2)
+                    % Constant terms from slide 30-31, lecture 10/14/16
+                    Crdot   = -alpha1*state1.rdot + -alpha2*state2.rdot;
+                    Cpdot   = -alpha1*state1.pdot + -alpha2*state2.pdot;
+                    Cr      = -alpha1*state1.r + -alpha2*state2.r + beta0*h*Crdot;
+                    Cp      = -alpha1*state1.p + -alpha2*state2.p + beta0*h*Cpdot;
+                otherwise
+                    error(['BDF of Order ' orderNum ' not implemented yet.']);
+            end
+                
+            
+            %%%%%%%%%%%
+            % STEP 0 : prime new time step
+            % (follow Iteration steps from slide 43, 10/17/16)
+           
+            % initial guesses
+            rddot   = state1.rddot;
+            pddot   = state1.pddot;
+            lambdaP = state1.lambdaP;
+            lambda  = state1.lambda;
+            
+
+            % useful constants
+            sys.constructMMatrix();  % update M
+            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
+            Z3 = zeros(sys.nFreeBodies);
+            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
+            Z5 = zeros(sys.rKDOF);
+            
+            % Newton Iteration Method
+            nu = 1; % iteration counter
+            while nu < maxIterations
+                %%%%%%%%%%%
+                % STEP 1 : compute position and velocity using BDF and most recent accelerations
+                r     = Cr + beta0^2*h^2*rddot;
+                p     = Cp + beta0^2*h^2*pddot;
+                rdot  = Crdot + beta0*h*rddot;
+                pdot  = Cpdot + beta0*h*pddot;
+                sys.updateSystem([r; p],[rdot; pdot],[rddot; pddot]);
+                
+                %%%%%%%%%%%
+                % STEP 2 : compute the residual (g) in nonlinear system, which
+                % is a function of most recent accelerations
+                % (see slide 26, 10/17/16)
+                sys.constructPhiF();            % update phi & phiP
+                sys.constructJpMatrix();        % update J^p
+                sys.constructPhi_q();           % update phi_r & phi_p
+                sys.constructPMatrix();         % update P
+                sys.constructFVector();         % update F
+                sys.constructTauHatVector();    % update TauHat
+                
+                % descretized equations of motion
+                g = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
+                    sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
+                    1/(beta0^2*h^2)*sys.phiP;
+                    1/(beta0^2*h^2)*sys.phi];
+
+                %%%%%%%%%%%
+                % STEP 3 : Solve nonlinear system to get correction deltaZ. 
+                switch newtonMethod
+                    % (For overview of newton methods available, see slide 26, 10/17/16)
+                    case 'QN' 
+                        % Use a QUASI-NEWTON iteration matrix (psi).
+                        % (see slide 31, 10/17/16)
+                        if nu == 1 % only compute once, on the first iteration
+                            psi = [    sys.M         Z1'     Z2'  sys.phi_r';
+                                          Z1     sys.Jp   sys.P'  sys.phi_p';
+                                          Z2      sys.P      Z3          Z4';
+                                   sys.phi_r  sys.phi_p      Z4          Z5];
+                        end
+                    case 'NR'
+                        % Use a full NEWTON-RAPHSON iteration matrix (psi).
+                        % (see slide 30, 10/17/16)
+                        psi = sys.constructPsiMatrix(h,beta0);
+                    case 'MN'
+                        % Use a MODIFIED-NEWTON iteration matrix (psi).
+                        % (see slide 26, 10/17/16)
+                        if nu == 1 % only compute once, on the first iteration
+                            psi = sys.constructPsiMatrix(h,beta0);
+                        end
+                    otherwise
+                        error('Specified Newton Method not implemented yet.');
+                end
+                
+                % calculate correction
+                deltaZ = psi\-g; 
+                %deltaZ(:,nu) = psi\-g; % for recording instances of deltaZ
+                
+                %%%%%%%%%%%
+                % STEP 4 : Improve the quality of the approximate solution
+                Z_old = [rddot; pddot; lambdaP; lambda];
+                Z = Z_old + deltaZ;
+                %Z = Z_old + deltaZ(:,nu); % for recording instances of deltaZ
+                rddot = Z(1:length(rddot));
+                pddot = Z(length(rddot)+1:length(rddot)+length(pddot));
+                lambdaP = Z(length(rddot)+length(pddot)+1:length(rddot)+length(pddot)+length(lambdaP));
+                lambda  = Z(length(rddot)+length(pddot)+length(lambdaP)+1:end);
+                
+                %%%%%%%%%%%
+                % STEP 5 : if the norm of the correction is small enough,
+                % go to step 6. Otherwise
+                nu = nu + 1;
+                
+                if norm(deltaZ) < tolerance
+                    break;
+                end
+            end
+            if nu >= maxIterations % notify of failed convergence
+                warning(['Did not converge in Quasi-Newton iteration, BDF1. Time = ' num2str(sys.time)]);
+                disp('but we are going on, baby!');
+            end
+            
+            %%%%%%%%%%%
+            % STEP 6 : Accep the acclerations and lambdas computed in step
+            % 4 as the solutions. Using the acclerations, find position and
+            % velocities.
+            r     = Cr + beta0^2*h^2*rddot;
+            p     = Cp + beta0^2*h^2*pddot;
+            rdot  = Crdot + beta0*h*rddot;
+            pdot  = Cpdot + beta0*h*pddot;
+            sys.updateSystem([r; p],[rdot; pdot],[rddot; pddot]); % final system state
+            sys.lambdaP = lambdaP;
+            sys.lambda = lambda;
+            sys.calculateReactions(); % derive sys.rForce, sys.rTorque
+            
+            % At this point you just finished one integration step. Life is
+            % good. Now repeat this for another time step
+        end
+        function violation = violationVelocityConstraints(sys)
+            % evaluate violation of the velocity constraints
+            % see slide 41 for lecture 10/17/16
+            sys.constructNuF();
+            vel = sys.phi_r*sys.rdot+sys.phi_p*sys.pdot;
+            violation = vel-sys.nu;
+        end
+        function calculateReactions(sys) % calculate reaction forces and torques
+            % From ME751_f2016 slide 8 of lecture 10/10/16
+            sys.rForce = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
+            sys.rTorque = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            for i = 1:sys.nFreeBodies
+                % Reaction Forces
+                phi_r_i = sys.phi_r(:,(3*i-2):3*i); % pull phi_r related to body i
+                
+                % total reaction forces for this body given by:
+                % rForceTotal on body i = -phi_r_i'*sys.lambda
+                % However, we want to find reactions forces for each lambda
+                % we are interested in. such that:
+                % rForceTotal on body i = (rForce on body i due to lamba1) + (rForce on body i due to lamba2) + ...
+
+                for j = 1:length(sys.lambda) % look at each row of phi_r_i
+                    sys.rForce{i,j} = -phi_r_i(j,:)'*sys.lambda(j); % reaction force j on body i
+                end
+                
+                
+                % Reaction Torques
+                phi_p_i = sys.phi_p(:,(4*i-3):4*i); % pull phi_p related to body i
+                
+                % total reaction torques for this body as:
+                % rTorqueTotal for body i = -phi_p_i'*sys.lambda
+                % However, we want to find reactions torques for each lambda
+                % we are interested in. such that:
+                % rTorqueTotal on body i = (rTorque on body i due to lamba1) + (rTorque on body i due to lamba2) + ...
+                % but rTorque is [4x1], need to convert to r-omega formulation
+                G = utility.Gmatrix(sys.body{bodyID(i)}.p); % calc G matrix
+                for j = 1:length(sys.lambda) % look at each row of phi_p_i
+                    sys.rTorque{i,j} = 0.5*G*-phi_p_i(j,:)'*sys.lambda(j);
+                end
+            end
+        end
+        function updateSystem(sys,q,qdot,qddot) %update r,p,and derivatives for each body in system
+            %%% update q (r and p)
+            if ~isempty(q)
+                sys.q = q;
+                
+                rowr = 1;
+                rowp = 1;
+                for i = sys.bodyIDs
+                    sys.body{i}.r = sys.r(rowr:rowr+2);
+                    sys.body{i}.p = sys.p(rowp:rowp+3);
+                    rowr = rowr + 3;
+                    rowp = rowp + 4;
+                end
+            end
+            
+            %%% update qdot (rdot and pdot)
+            if ~isempty(qdot)
+                sys.qdot = qdot;
+                
+                rowr = 1;
+                rowp = 1;
+                for i = sys.bodyIDs
+                    sys.body{i}.rdot = sys.rdot(rowr:rowr+2);
+                    sys.body{i}.pdot = sys.pdot(rowp:rowp+3);
+                    rowr = rowr + 3;
+                    rowp = rowp + 4;
+                end
+            end
+            
+            %%% update qddot (rddot and pddot)
+            if ~isempty(qddot)
+                sys.qddot = qddot;
+                
+                rowr = 1;
+                rowp = 1;
+                for i = sys.bodyIDs
+                    sys.body{i}.rddot = sys.rddot(rowr:rowr+2);
+                    sys.body{i}.pddot = sys.pddot(rowp:rowp+3);
+                    rowr = rowr + 3;
+                    rowp = rowp + 4;
+                end
+            end
+        end
+        function state = getSystemState(sys) % return structure of relevant state variables
+            state.time = sys.time;
+            state.r = sys.r;
+            state.p = sys.p;
+            state.rdot = sys.rdot;
+            state.pdot = sys.pdot;
+            state.rddot = sys.rddot;
+            state.pddot = sys.pddot;
+            state.lambda = sys.lambda;
+            state.lambdaP = sys.lambdaP;
+            state.rForce = sys.rForce;
+            state.rTorque = sys.rTorque;
+        end
+        function setSystemTime(sys,t) % set time for entire system
+            % set system time. Bodies, constraints, and forces should be
+            % able to access this time.
+            sys.time = t;
+        end
+    end
+    methods (Access = private) % methods for constructing system terms 
         function constructPhi(sys) % construct phi matrix (kinematic & driving constraints)
             % phi = [(rKDOF) x 1]
             sys.phi = zeros(sys.rKDOF,1); % initialize phi for speed
@@ -579,67 +1095,6 @@ classdef system3D < handle
             sys.qdot = [rdot;pdot];
             sys.qddot = [rddot;pddot];
         end
-        function positionAnalysis(sys,tolerance,maxIterations) % position analysis of system
-            % Performs kinematic position analysis using Newton-Raphson method
-            
-            if ~exist('tolerance','var') || isempty(tolerance)
-                tolerance = 1e-9;  % default tolerance
-            end
-            if ~exist('maxIterations','var') || isempty(maxIterations)
-                maxIterations = 50; % default maximum iterations
-            end
-             
-            guessQ = sys.q; % initial guess
-            
-            for i = 1:maxIterations % iterate
-                sys.constructPhiF();   % get constraint matrix
-                sys.constructPhiF_q(); % get jacobian
-                correction = sys.phiF_q\sys.phiF; % correction 
-                guessQ = guessQ - correction; % update guess
-                
-                % update bodies
-                sys.updateSystem(guessQ,[],[]);
-                
-                if norm(correction) < tolerance %check for convergence
-                    break;
-                end
-            end
-            if i >= maxIterations
-                error('Failed to converge position analysis, the maximum number of iterations is reached')
-            end
-            
-        end
-        function velocityAnalysis(sys) % solve for velocities of the system
-            % compute velocity and derivative of euler parameters
-            % for a given time (t)
-            
-            % calculate RHS of velocity equation
-            sys.constructNuF();
-            
-            % find jacobian of phi
-            sys.constructPhiF_q();
-            
-            % solve for velocities (qdot)
-            qdot = sys.phiF_q\sys.nuF;
-            
-            % update bodies
-            sys.updateSystem([],qdot,[]);
-        end
-        function accelerationAnalysis(sys) % solve for accelerations of the system
-            % compute acceleration and 2nd derivative of euler parameters
-            % for a given time (t)
-            
-            % calculate RHS of acceleration equation
-            sys.constructGammaHatF();
-            
-            % already found jacobian of phi
-            
-            % solve for accelerations (qddot)
-            qddot = sys.phiF_q\sys.gammaHatF;
-            
-            % update bodies
-            sys.updateSystem([],[],qddot);
-        end
         function constructPMatrix(sys) % construct the P matrix used in EOM
             % from ME751_f2016 slide 27 of lecture 10/05/16
             sys.P = zeros(sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
@@ -701,437 +1156,175 @@ classdef system3D < handle
                 J = sys.body{bodyID(i)}.Jbar; % pull inertia tensor
                 G = utility.Gmatrix(sys.body{bodyID(i)}.p); % calc G matrix
                 Gdot = utility.Gmatrix(sys.body{bodyID(i)}.pdot); % calc Gdot matrix
-                P = sys.body{bodyID(i)}.p; % pull euler parameters
-                TauHat = 2*G'*nBar + 8*Gdot'*J*Gdot*P;
+                p = sys.body{bodyID(i)}.p; % pull euler parameters
+                TauHat = 2*G'*nBar + 8*Gdot'*J*Gdot*p;
                 sys.TauHat((4*i-3):4*i) = TauHat;
             end
         end
-        function findInitialAccelerations(sys) % find initial conditions for acceleration
-            % from ME751_f2016, slide 42 from lecture 10/17/2016
+        function psi = constructPsiMatrix(sys,h,beta0) % construct the full blown Jacobian (psi) matrix used in dynamics analysis.
+            % constuct the full blown Jacobian (psi) matrix used in dynamics analysis.
+            % inputs:
+            %      h: step size, in seconds
+            %  beta0: BDF constant
             
-            %%%%%%
-            % fill out LHS matrix
-            sys.constructMMatrix();  % update M
-            sys.constructJpMatrix(); % update J^p
-            sys.constructPhiF();     % update phi & phiP
-            sys.constructPhi_q();    % update phi_r & phi_p
-            sys.constructPMatrix();  % update P
-            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z3 = zeros(sys.nFreeBodies);
-            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
-            Z5 = zeros(sys.rKDOF);
-            LHS = [    sys.M         Z1'     Z2'  sys.phi_r';
-                          Z1     sys.Jp   sys.P'  sys.phi_p';
-                          Z2      sys.P      Z3          Z4';
-                   sys.phi_r  sys.phi_p      Z4          Z5];
+            % These matrices should have been updated previous
+            % to the call to construct psi: 
+            % sys.phi_r, sys.phi_p, sys.P, sys.F, sys.TauHat
             
-            %%%%%%
-            % fill out RHS matrix
-            sys.constructFVector();       % update F
-            sys.constructTauHatVector();  % update TauHat
-            sys.constructGammaHatF();     % gammaHat and gammaHatF
-            RHS = [sys.F; sys.TauHat; sys.gammaHatP; sys.gammaHat];
+            % although forces could be a function of r, rdot, p, and pdot...
+            % At present, we are only supporting force functions of time. 
+            % Thus, F_r, F_p, F_rdot, F_pdot will be zeros.
+            F_r         = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies);
+            F_p         = zeros(3*sys.nFreeBodies,4*sys.nFreeBodies); 
+            F_rdot      = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies); 
+            F_pdot      = zeros(3*sys.nFreeBodies,4*sys.nFreeBodies); 
             
-            %%%%%%
-            % solve for initial accelerations
-            accel = LHS\RHS;
-            sys.updateSystem([],[],accel(1:7*sys.nFreeBodies)); % update qddot
-            sys.lambdaP = accel(7*sys.nFreeBodies+1:7*sys.nFreeBodies+sys.rPDOF); % update lambdaP
-            sys.lambda = accel(7*sys.nFreeBodies+sys.rPDOF+1:end); % update lambda
-            sys.calculateReactions(); % derive sys.rForce, sys.rTorque
-        end
-        function QN_BDF1_check(sys,h,state1) % Quasi-Newton using BDF order 1
-            
-            %%%%%%%%%%%%%%%%%%
-             % useful constants
-            sys.constructMMatrix();  % update M
-            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z3 = zeros(sys.nFreeBodies);
-            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
-            Z5 = zeros(sys.rKDOF);
-            
-            %%%%%%%%%%%%%%%%%%
-            % Steps:
-            % Find PSI
-            % find Ystar
-            % find G(Ystar)
-            % find Ystar + delta
-            % find G( Ystar + delta )
-            % find (G(Ystar+delta) - g(Ystar))/delta
-            % compare with original PSI
-            
-            %%%%%%%%%%%%%%%%%%
-            % Find PSI
-            % BDF constants
-            beta0  =  1;
-            alpha1 = -1;
-            Crdot   = -alpha1*state1.rdot;
-            Cpdot   = -alpha1*state1.pdot;
-            Cr      = -alpha1*state1.r + beta0*h*Crdot;
-            Cp      = -alpha1*state1.p + beta0*h*Cpdot;
-            % initial guesses
-            rddot   = state1.rddot;
-            pddot   = state1.pddot;
-            lambdaP = state1.lambdaP;
-            lambda  = state1.lambda;
-            %compute position and velocity using BDF and most recent accelerations
-            r     = Cr + beta0^2*h^2*rddot;
-            p     = Cp + beta0^2*h^2*pddot;
-            rdot  = Crdot + beta0*h*rddot;
-            pdot  = Cpdot + beta0*h*pddot;
-            sys.updateSystem([r; p],[rdot; pdot],[]);
-            %compute PSI (jacobian)
-            sys.constructPhiF();            % update phi & phiP
-            sys.constructJpMatrix();        % update J^p
-            sys.constructPhi_q();           % update phi_r & phi_p
-            PSI = [    sys.M         Z1'     Z2'  sys.phi_r';
-                          Z1     sys.Jp   sys.P'  sys.phi_p';
-                          Z2      sys.P      Z3          Z4';
-                   sys.phi_r  sys.phi_p      Z4          Z5];
-               
-               
-            %%%%%%%%%%%%%%%%%%
-            % Find OG PSI
-            r     = state1.r;
-            p     = state1.p;
-            rdot  = state1.rdot;
-            pdot  = state1.pdot;
-            rddot = state1.rddot;
-            pddot = state1.pddot;
-            sys.updateSystem([r; p],[rdot; pdot],[]);
-            %compute PSI (jacobian)
-            sys.constructPhiF();            % update phi & phiP
-            sys.constructJpMatrix();        % update J^p
-            sys.constructPhi_q();           % update phi_r & phi_p
-            PSIog = [    sys.M         Z1'     Z2'  sys.phi_r';
-                          Z1     sys.Jp   sys.P'  sys.phi_p';
-                          Z2      sys.P      Z3          Z4';
-                   sys.phi_r  sys.phi_p      Z4          Z5];
-            
-            %%%%%%%%%%%%%%%%%%
-            % find Ystar
-            r     = state1.r;
-            p     = state1.p;
-            rdot  = state1.rdot;
-            pdot  = state1.pdot;
-            rddot = state1.rddot;
-            pddot = state1.pddot;
-            sys.updateSystem([r; p],[rdot; pdot],[]);
+            % although torques could be a function of r, rdot, p, and pdot...
+            % At present, we are only supporting torque functions of time. 
+            % Thus, TauHat_r, TauHat_rdot will be zeros,
+            % and TauHat_p, TauHat_pdot will be simplified.
+            TauHat_r    = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
+            TauHat_rdot = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
             
             
-            %%%%%%%%%%%%%%%%%%
-            % find G(Ystar)
-            sys.constructPhiF();            % update phi & phiP
-            sys.constructJpMatrix();        % update J^p
-            sys.constructPhi_q();           % update phi_r & phi_p
-            sys.constructPMatrix();         % update P
-            sys.constructFVector();         % update F
-            sys.constructTauHatVector();    % update TauHat
-            G = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
-                sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
-                1/(beta0^2*h^2)*sys.phiP;
-                1/(beta0^2*h^2)*sys.phi];
-            
-            %%%%%%%%%%%%%%%%%%
-            % find Ystar + delta
-            delta = 10^-3;
-            r     = state1.r;
-            p     = state1.p;
-            rdot  = state1.rdot;
-            pdot  = state1.pdot;
-            rddot = state1.rddot;
-            pddot = state1.pddot;
-            lambda(5) = lambda(5)+delta;
-            
-            sys.updateSystem([r; p],[rdot; pdot],[]);
-            
-            
-            %%%%%%%%%%%%%%%%%%
-            % find G( Ystar + delta )
-            sys.constructPhiF();            % update phi & phiP
-            sys.constructJpMatrix();        % update J^p
-            sys.constructPhi_q();           % update phi_r & phi_p
-            sys.constructPMatrix();         % update P
-            sys.constructFVector();         % update F
-            sys.constructTauHatVector();    % update TauHat
-            Gdelta = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
-                sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
-                1/(beta0^2*h^2)*sys.phiP;
-                1/(beta0^2*h^2)*sys.phi];
-            
-            
-            %%%%%%%%%%%%%%%%%%
-            % find (G(Ystar+delta) - g(Ystar))/delta
-            FD = (Gdelta-G)./delta;
-            
-            
-            %%%%%%%%%%%%%%%%%%
-            % compare with original PSI
-            PSIog
-            PSI
-            FD
-            r
-            
-            
-            
-            
-            
-            
-           
-
-        end
-        function BDF_QN(sys,orderNum,h,varargin) % Quasi-Newton using BDF of the order specified
-            % Perform Quasi-Newton iteration using
-            % Backwards Difference Formula
-            % see ME751_f2016, slides 18-22, 10/14/16
-            % also see ME751_f2016, slide 43, 10/17/16
-            % 
-            % Note: This function only solves one intergration step, at the current system time
-            %
-            % INPUTS:
-            %      h : step size, in seconds
-            % varargin: a collection of states of the system, in order from
-            % most recent to least recent...
-            %   state1 : structure of system values at previous time step, t(n-1)
-            %   state2 : structure of system values at previous time step, t(n-2)
-            
-            % solver parameters
-            maxIterations = 50; % 50;
-            tolerance = 1e-2; %1e-8;
-            
-            switch orderNum % BDF order number
-                case 1 % Order 1: (this is also known as the Backwards Euler Method)
-                    % BDF constants
-                    beta0  =  1;
-                    alpha1 = -1;
-                    state1 = varargin{1}; % system state from previous time step, t(n-1)
-                    % Constant terms from slide 30-31, lecture 10/14/16
-                    Crdot   = -alpha1*state1.rdot;
-                    Cpdot   = -alpha1*state1.pdot;
-                    Cr      = -alpha1*state1.r + beta0*h*Crdot;
-                    Cp      = -alpha1*state1.p + beta0*h*Cpdot;
-                
-                case 2 % order 2
-                    % BDF constants
-                    beta0  =  2/3;
-                    alpha1 = -4/3;
-                    alpha2 =  1/3;
-                    state1 = varargin{1}; % system state from previous time step, t(n-1)
-                    state2 = varargin{2}; % system state from previous time step, t(n-2)
-                    % Constant terms from slide 30-31, lecture 10/14/16
-                    Crdot   = -alpha1*state1.rdot + -alpha2*state2.rdot;
-                    Cpdot   = -alpha1*state1.pdot + -alpha2*state2.pdot;
-                    Cr      = -alpha1*state1.r + -alpha2*state2.r + beta0*h*Crdot;
-                    Cp      = -alpha1*state1.p + -alpha2*state2.p + beta0*h*Cpdot;
-                otherwise
-                    error(['BDF of Order ' orderNum ' not implemented yet.']);
-            end
-                
-            
-            %%%%%%%%%%%
-            % STEP 0 : prime new time step
-            % (follow Iteration steps from slide 43, 10/17/16)
-           
-            % initial guesses
-            rddot   = state1.rddot;
-            pddot   = state1.pddot;
-            lambdaP = state1.lambdaP;
-            lambda  = state1.lambda;
-            
-
-            % useful constants
-            sys.constructMMatrix();  % update M
-            Z1 = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies); 
-            Z3 = zeros(sys.nFreeBodies);
-            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
-            Z5 = zeros(sys.rKDOF);
-            
-            % Quasi-Newton Iteration Method
-            nu = 1; % iteration counter
-            while nu < maxIterations
-                %%%%%%%%%%%
-                % STEP 1 : compute position and velocity using BDF and most recent accelerations
-                r     = Cr + beta0^2*h^2*rddot;
-                p     = Cp + beta0^2*h^2*pddot;
-                rdot  = Crdot + beta0*h*rddot;
-                pdot  = Cpdot + beta0*h*pddot;
-                sys.updateSystem([r; p],[rdot; pdot],[]);
-                
-                %%%%%%%%%%%
-                % STEP 2 : compute the residual (g) in nonlinear system, which
-                % is a function of most recent accelerations
-                % (see slide 26, 10/17/16)
-                sys.constructPhiF();            % update phi & phiP
-                sys.constructJpMatrix();        % update J^p
-                sys.constructPhi_q();           % update phi_r & phi_p
-                sys.constructPMatrix();         % update P
-                sys.constructFVector();         % update F
-                sys.constructTauHatVector();    % update TauHat
-                
-                % descretized equations of motion
-                g = [sys.M*rddot + sys.phi_r'*lambda + -sys.F;
-                    sys.Jp*pddot + sys.phi_p'*lambda + sys.P'*lambdaP + -sys.TauHat;
-                    1/(beta0^2*h^2)*sys.phiP;
-                    1/(beta0^2*h^2)*sys.phi];
-
-                %%%%%%%%%%%
-                % STEP 3 : Solve nonlinear system to get correction deltaZ. 
-                % Use a QUASI-NEWTON iteration matrix (psi).
-                % (see slide 26, 10/17/16)
-                %if nu == 1
-                    psi = [    sys.M         Z1'     Z2'  sys.phi_r';
-                                  Z1     sys.Jp   sys.P'  sys.phi_p';
-                                  Z2      sys.P      Z3          Z4';
-                           sys.phi_r  sys.phi_p      Z4          Z5];
-                %end
-                deltaZ = psi\-g; % for recording instances of deltaZ
-                %deltaZ(:,nu) = psi\-g; % for recording instances of deltaZ
-                
-                %%%%%%%%%%%
-                % STEP 4 : Improve the quality of the approximate solution
-                Z_old = [rddot; pddot; lambdaP; lambda];
-                Z = Z_old + deltaZ;
-                %Z = Z_old + deltaZ(:,nu); % for recording instances of deltaZ
-                rddot = Z(1:length(rddot));
-                pddot = Z(length(rddot)+1:length(rddot)+length(pddot));
-                lambdaP = Z(length(rddot)+length(pddot)+1:length(rddot)+length(pddot)+length(lambdaP));
-                lambda  = Z(length(rddot)+length(pddot)+length(lambdaP)+1:end);
-                
-                %%%%%%%%%%%
-                % STEP 5 : if the norm of the correction is small enough,
-                % go to step 6. Otherwise
-                nu = nu + 1;
-                
-                if norm(deltaZ) < tolerance
-                    break;
-                end
-            end
-            if nu >= maxIterations % notify of failed convergence
-                warning(['Did not converge in Quasi-Newton iteration, BDF1. Time = ' num2str(sys.time)]);
-                disp('but we are going on, baby!');
-            end
-            
-            %%%%%%%%%%%
-            % STEP 6 : Accep the acclerations and lambdas computed in step
-            % 4 as the solutions. Using the acclerations, find position and
-            % velocities.
-            r     = Cr + beta0^2*h^2*rddot;
-            p     = Cp + beta0^2*h^2*pddot;
-            rdot  = Crdot + beta0*h*rddot;
-            pdot  = Cpdot + beta0*h*pddot;
-            sys.updateSystem([r; p],[rdot; pdot],[rddot; pddot]); % final system state
-            sys.lambdaP = lambdaP;
-            sys.lambda = lambda;
-            sys.calculateReactions(); % derive sys.rForce, sys.rTorque
-            
-            % At this point you just finished one integration step. Life is
-            % good. Now repeat this for another time step
-        end
-        function violation = violationVelocityConstraints(sys)
-            % evaluate violation of the velocity constraints
-            % see slide 41 for lecture 10/17/16
-            sys.constructNuF();
-            vel = sys.phi_r*sys.rdot+sys.phi_p*sys.pdot;
-            violation = vel-sys.nu;
-        end
-        function calculateReactions(sys) % calculate reaction forces and torques
-            % From ME751_f2016 slide 8 of lecture 10/10/16
-            sys.rForce = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
-            sys.rTorque = cell(sys.nFreeBodies,length(sys.lambda)); % preallocate for speed
+            % build required terms
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
-            for i = 1:sys.nFreeBodies
-                % Reaction Forces
-                phi_r_i = sys.phi_r(:,(3*i-2):3*i); % pull phi_r related to body i
+            JpPddot_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);   % preallocate for speed
+            TauHat_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);    % preallocate for speed
+            TauHat_pdot = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
+            for i = 1:sys.nFreeBodies % iterate through every free body
+                %%%% find JpPddot_p (see slide 34, lecture 10/17/16)
+                p = sys.body{bodyID(i)}.p;
+                pddot = sys.body{bodyID(i)}.pddot;
+                Jbar = sys.body{bodyID(i)}.Jbar;
+                G = utility.Gmatrix(p);
+                Gddot = utility.Gmatrix(pddot);
+                a = Jbar*G*pddot;
+                T = [0 -a'; a -utility.tilde(a)];
+                JpPddot_p(4*i-3:4*i,4*i-3:4*i) = -4*G'*Jbar*Gddot + 4*T;
                 
-                % total reaction forces for this body given by:
-                % rForceTotal on body i = -phi_r_i'*sys.lambda
-                % However, we want to find reactions forces for each lambda
-                % we are interested in. such that:
-                % rForceTotal on body i = (rForce on body i due to lamba1) + (rForce on body i due to lamba2) + ...
-
-                for j = 1:length(sys.lambda) % look at each row of phi_r_i
-                    sys.rForce{i,j} = -phi_r_i(j,:)'*sys.lambda(j); % reaction force j on body i
-                end
+                %%%% find TauHat_p (see slide 26, lecture 10/05/16)
+                pdot = sys.body{bodyID(i)}.pdot;
+                Gdot = utility.Gmatrix(pdot);
+                TauHat_p(4*i-3:4*i,4*i-3:4*i) = 8*Gdot'*Jbar*Gdot;  % block diagonal matrix
                 
-                
-                % Reaction Torques
-                phi_p_i = sys.phi_p(:,(4*i-3):4*i); % pull phi_p related to body i
-                
-                % total reaction torques for this body as:
-                % rTorqueTotal for body i = -phi_p_i'*sys.lambda
-                % However, we want to find reactions torques for each lambda
-                % we are interested in. such that:
-                % rTorqueTotal on body i = (rTorque on body i due to lamba1) + (rTorque on body i due to lamba2) + ...
-                % but rTorque is [4x1], need to convert to r-omega formulation
-                G = utility.Gmatrix(sys.body{bodyID(i)}.p); % calc G matrix
-                for j = 1:length(sys.lambda) % look at each row of phi_p_i
-                    sys.rTorque{i,j} = 0.5*G*-phi_p_i(j,:)'*sys.lambda(j);
-                end
-            end
-        end
-        function updateSystem(sys,q,qdot,qddot) %update r,p,and derivatives for each body in system
-            %%% update q (r and p)
-            if ~isempty(q)
-                sys.q = q;
-                
-                rowr = 1;
-                rowp = 1;
-                for i = sys.bodyIDs
-                    sys.body{i}.r = sys.r(rowr:rowr+2);
-                    sys.body{i}.p = sys.p(rowp:rowp+3);
-                    rowr = rowr + 3;
-                    rowp = rowp + 4;
-                end
+                %%%% find TauHat_pdot (see slide 26, lecture 10/05/16)
+                %%%% See slide 34 from lecture 10/17/16 for similar
+                %%%% derivation for finding partial of 8*Gdot'*Jbar*Gdot*p
+                %%%% with respect to pdot
+                a2 = Jbar*Gdot*p;
+                T2 = [0 -a2'; a2 -utility.tilde(a2)];
+                TauHat_pdot(4*i-3:4*i,4*i-3:4*i) = -8*Gdot'*Jbar*G + 8*T2;  % block diagonal matrix
             end
             
-            %%% update qdot (rdot and pdot)
-            if ~isempty(qdot)
-                sys.qdot = qdot;
-                
-                rowr = 1;
-                rowp = 1;
-                for i = sys.bodyIDs
-                    sys.body{i}.rdot = sys.rdot(rowr:rowr+2);
-                    sys.body{i}.pdot = sys.pdot(rowp:rowp+3);
-                    rowr = rowr + 3;
-                    rowp = rowp + 4;
-                end
-            end
             
-            %%% update qddot (rddot and pddot)
-            if ~isempty(qddot)
-                sys.qddot = qddot;
-                
-                rowr = 1;
-                rowp = 1;
-                for i = sys.bodyIDs
-                    sys.body{i}.rddot = sys.rddot(rowr:rowr+2);
-                    sys.body{i}.pddot = sys.pddot(rowp:rowp+3);
-                    rowr = rowr + 3;
-                    rowp = rowp + 4;
-                end
+            
+            
+            % NOW I JUST NEED TO DEFINE THESE TERMS... JOY!!!
+            %             phiRLambda_r
+            %             phiRLambda_p
+            %             phiPLambda_r
+            %             phiPLambda_p
+            %             PLamdaP_p
+            
+            
+            
+            % create psi entries (see slide 30, 10/17/16)
+            psi11 = sys.M + h^2*beta0^2*phiRLambda_r - h^2*beta0^2*F_r - h*beta0*F_rdot;
+            psi12 = h^2*beta0^2*phiRLambda_p - h^2*beta0^2*F_p - h*beta0*F_pdot;
+            psi21 = h^2*beta0^2*phiPLambda_r - h^2*beta0^2*TauHat_r - h*beta0*TauHat_rdot;
+            psi22 = sys.Jp + h^2*beta0^2*JpPddot_p + h^2*beta0^2*PLamdaP_p + h^2*beta0^2*phiPLambda_p - h^2*beta0^2*TauHat_p - h*beta0*TauHat_pdot;
+            
+            % zeros matrices
+            Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies);
+            Z3 = zeros(sys.nFreeBodies);
+            Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
+            Z5 = zeros(sys.rKDOF);
+            
+            % construct psi, (see slide 30, 10/17/16)
+            psi = [    psi11      psi12      Z2'  sys.phi_r';
+                       psi21      psi22   sys.P'  sys.phi_p';
+                          Z2      sys.P      Z3          Z4';
+                   sys.phi_r  sys.phi_p      Z4          Z5];
+            
+        end
+        function [F_r, F_p, F_rdot, F_pdot, TauHat_r, TauHat_p, TauHat_rdot, TauHat_pdot] = buildPartialDerivativesOfForces(sys) % partial derivatives of sys.F and sys.TauHat
+            % for the current system time step, construct the partial
+            % derivatives of sys.F and sys.TauHat
+            % these partial derivatives are with respect to r,p,rdot,pdot
+            
+            % based on: 
+            % ME751_f2016 slide 33 from lecture 10/17/16
+            % ME751_f2016 slide 26-27 from lecture 10/05/16
+            
+            F_r         = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies);
+            F_p         = zeros(3*sys.nFreeBodies,4*sys.nFreeBodies); 
+            F_rdot      = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies); 
+            F_pdot      = zeros(3*sys.nFreeBodies,4*sys.nFreeBodies); 
+            TauHat_r    = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
+            TauHat_p    = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);
+            TauHat_rdot = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
+            TauHat_pdot = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);
+            
+%             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+%             for i = 1:sys.nFreeBodies % iterate through every free body
+%                 %iF_r    = zeros(3,3); % iterative F_r
+%                 %iF_p    = zeros(3,4); % iterative F_p
+%                 %iF_rdot = zeros(3,3); % iterative F_r
+%                 %iF_pdot = zeros(3,4); % iterative F_p
+%                 
+%                 for j = 1:sys.body{bodyID(i)}.nForces
+%                     % sum partial derivatives acting on that body
+%                     %iF_r    = iF_r + sys.body{bodyID(i)}.forces{j}.force_r; %[3x3]
+%                     %iF_p    = iF_p + sys.body{bodyID(i)}.forces{j}.force_p; %[3x4]
+%                     %iF_rdot = iF_rdot + sys.body{bodyID(i)}.forces{j}.force_rdot; %[3x3]
+%                     %iF_pdot = iF_pdot + sys.body{bodyID(i)}.forces{j}.force_pdot; %[3x4]
+%                     
+%                     % sum active and gravitational torques acting
+%                     nBar = nBar + sys.body{bodyID(i)}.forces{j}.torque; 
+%                 end
+%                 
+% %                 p = sys.body{bodyID(i)}.p; % pull euler parameters
+% %                 J = sys.body{bodyID(i)}.Jbar; % pull inertia tensor
+% %                 G = utility.Gmatrix(p); % calc G matrix
+% %                 Gdot = utility.Gmatrix(sys.body{bodyID(i)}.pdot); % calc Gdot matrix
+% %                 G_r = zeros()
+% %                 TauHat_p = 8*Gdot'*J*Gdot*p;
+%                 
+%                 % plug sums into final terms
+%                 %F_r((3*i-2):3*i,(3*i-2):3*i)    = iF_r;
+%                 %F_p((3*i-2):3*i,(4*i-3):4*i)    = iF_p;
+%                 %F_rdot((3*i-2):3*i,(3*i-2):3*i) = iF_rdot;
+%                 %F_pdot((3*i-2):3*i,(4*i-3):4*i) = iF_pdot;
+%             end
+        end
+        function JpPddot_p = buildJpPddot_p(sys) % build partial derivative JpPddot_p
+            % this is a term used in the construction of Newton Raphson psi
+            % matrix. 
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            JpPddot_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
+            for i = 1:sys.nFreeBodies % iterate through every free body
+                %%%% find JpPddot_p (see slide 34, lecture 10/17/16)
+                p = sys.body{bodyID(i)}.p;
+                pddot = sys.body{bodyID(i)}.pddot;
+                Jbar = sys.body{bodyID(i)}.Jbar;
+                a = Jbar*utility.Gmatrix(p)*pddot;
+                T = [0 -a'; a -utility.tilde(a)];
+                JpPddot_p(4*i-3:4*i,4*i-3:4*i) = 4*(T-utility.Gmatrix(p)'*Jbar*utility.Gmatrix(pddot));
             end
         end
-        function state = getSystemState(sys) % return structure of relevant state variables
-            state.time = sys.time;
-            state.r = sys.r;
-            state.p = sys.p;
-            state.rdot = sys.rdot;
-            state.pdot = sys.pdot;
-            state.rddot = sys.rddot;
-            state.pddot = sys.pddot;
-            state.lambda = sys.lambda;
-            state.lambdaP = sys.lambdaP;
-            state.rForce = sys.rForce;
-            state.rTorque = sys.rTorque;
-        end
-        function setSystemTime(sys,t) % set time for entire system
-            % set system time. Bodies, constraints, and forces should be
-            % able to access this time.
-            sys.time = t;
+        function TauHat_p = buildTauHat_p(sys) % build partial derivative TauHat_p
+            % this is a term used in the construction of Newton Raphson psi
+            % matrix. 
+            bodyID   = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            TauHat_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
+            
+            for i = 1:sys.nFreeBodies % iterate through every free body
+                %%%% find TauHat_p (see slide 26, lecture 10/05/16)
+                Jbar = sys.body{bodyID(i)}.Jbar;
+                Gdot = utility.Gmatrix(sys.body{bodyID(i)}.pdot);
+                TauHat_p(4*i-3:4*i,4*i-3:4*i) = 8*Gdot'*Jbar*Gdot;  % block diagonal matrix
+            end
         end
     end
     methods % methods block with no attributes

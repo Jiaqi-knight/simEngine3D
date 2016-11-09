@@ -154,6 +154,38 @@ classdef dp1 < handle
                 phi_p = [phi_pi, phi_pj]; 
             end
         end
+
+        function  out = phi_rLambda_r(cons,lambda)
+            %from ME751_f2016 slide 35,36 from lecture 10/17/16
+            dim_r = length(cons.phi_r);
+            out = lambda*zeros(dim_r,dim_r); % will be [3x3] or [6x6], depends on if there is a grounded body
+        end
+        function  out = phi_rLambda_p(cons,lambda)
+            %from ME751_f2016 slide 35,36 from lecture 10/17/16
+            dim_r = length(cons.phi_r);
+            dim_p = length(cons.phi_p);
+            out = lambda*zeros(dim_r,dim_p); % will be [3x4] or [6x8], depends on if there is a grounded body
+        end
+        function  out = phi_pLambda_r(cons,lambda)
+            %from ME751_f2016 slide 35,36 from lecture 10/17/16
+            dim_r = length(cons.phi_r);
+            dim_p = length(cons.phi_p);
+            out = lambda*zeros(dim_p,dim_r); % will be [3x4] or [6x8], depends on if there is a grounded body
+        end
+        function  out = phi_pLambda_p(cons,lambda)
+            %from ME751_f2016 slide 35,36 from lecture 10/17/16
+            % will be [4x4] or [8x8], depends on if there is a grounded body
+            
+            if cons.bodyi.isGround
+                out = lambda*utility.Kmatrix(cons.aBari,cons.bodyj.A*cons.aBarj); % [4x4]
+            elseif cons.bodyj.isGround
+                out = lambda*utility.Kmatrix(cons.aBarj,cons.bodyi.A*cons.aBari); % [4x4]
+            else % [8x8]
+                out = lambda*[utility.Kmatrix(cons.aBari,cons.bodyj.A*cons.aBarj)   utility.Bmatrix(cons.bodyi.p,cons.aBari)'*utility.Bmatrix(cons.bodyj.p,cons.aBarj);
+                              utility.Bmatrix(cons.bodyj.p,cons.aBarj)'*utility.Bmatrix(cons.bodyi.p,cons.aBari)   utility.Kmatrix(cons.aBarj,cons.bodyi.A*cons.aBari)]; 
+            end
+            
+        end
     end
     
 end
