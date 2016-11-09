@@ -73,7 +73,7 @@ fdot = @(t)((pi*sin(2*t)*sin((pi*cos(2*t))/4 - pi/2))/2);%((pi*sin(2*t)*sin((pi*
 fddot = @(t)(pi*cos(2*t)*sin((pi*cos(2*t))/4 - pi/2) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4 - pi/2))/4);%(pi*cos(2*t)*sin((pi*cos(2*t))/4) - (pi^2*sin(2*t)^2*cos((pi*cos(2*t))/4))/4);
 sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,4,f,fdot,fddot,t) % unit length vectors
 
-%% ASSEMBLE CONSTRAINT MATRIX 
+%% ASSEMBLE CONSTRAINT MATRIX (and add euler parameter normalization constraints)
 sys.assembleConstraints()
 
 %% ADD FORCES

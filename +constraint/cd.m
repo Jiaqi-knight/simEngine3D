@@ -153,6 +153,57 @@ classdef cd < handle
                 phi_p = [phi_pi, phi_pj]; 
             end
         end
+        function phiLambda_rr = phiLambda_rr(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to r (position)
+            % from ME751_f2016 slide 35,39 from lecture 10/17/16
+            % phiLambda_rr : [6x6] normally, unless grounded, then [3x3]
+            % inputs:
+            %    lambda : scalar value
+            
+            dim_r = length(cons.phi_r);
+            phiLambda_rr = lambda*zeros(dim_r,dim_r); % [3x3] or [6x6]
+        end
+        function  phiLambda_rp = phiLambda_rp(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to p (orientation)
+            %from ME751_f2016 slide 35,39 from lecture 10/17/16
+            % phiLambda_rp : [6x8] normally, unless grounded, then [3x4]
+            % inputs:
+            %    lambda : scalar value
+            
+            dim_r = length(cons.phi_r);
+            dim_p = length(cons.phi_p);
+            phiLambda_rp = lambda*zeros(dim_r,dim_p); % [3x4] or [6x8]
+        end
+        function  phiLambda_pr = phiLambda_pr(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to r (position)
+            %from ME751_f2016 slide 35,39 from lecture 10/17/16
+            % phiLambda_pr : [8x6] normally, unless grounded, then [4x3]
+            % inputs:
+            %    lambda : scalar value
+            
+            dim_r = length(cons.phi_r);
+            dim_p = length(cons.phi_p);
+            phiLambda_pr = lambda*zeros(dim_p,dim_r); % [4x3] or [8x6]
+        end
+        function  phiLambda_pp = phiLambda_pp(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to p (orientation)
+            %from ME751_f2016 slide 35,39 from lecture 10/17/16
+            % will be [4x4] or [8x8], depends on if there is a grounded body
+            % inputs:
+            %    lambda : scalar value
+            
+            phiLambda_ppii = -utility.Kmatrix(cons.bodyi.point{cons.Pi},cons.c);
+            phiLambda_ppjj =  utility.Kmatrix(cons.bodyj.point{cons.Qj},cons.c);
+            
+            if cons.bodyi.isGround
+                phiLambda_pp = lambda*phiLambda_ppjj; % [4x4]
+            elseif cons.bodyj.isGround
+                phiLambda_pp = lambda*phiLambda_ppii; % [4x4]
+            else % [8x8]
+                phiLambda_pp = lambda*[phiLambda_ppii   zeros(4,4);
+                                       zeros(4,4)      phiLambda_ppjj]; 
+            end 
+        end
     end
     
 end

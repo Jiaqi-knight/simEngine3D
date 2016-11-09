@@ -86,5 +86,45 @@ classdef rj < handle
             % phi_p : [5x8] normally, unless grounded, then [5x4]
             phi_p = [cons.subCons{1}.phi_p; cons.subCons{2}.phi_p];
         end
-    end
-end
+        function phiLambda_rr = phiLambda_rr(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to r (position)
+            % following technique from get.phi_r and get.phi_p
+            % phiLambda_rr : [30x6] normally, unless grounded, then [15x3]
+            % inputs:
+            %    lambda : [5x1] vector of lambda values, corresponding to
+            %    the subconstraints
+            
+            phiLambda_rr = [cons.subCons{1}.phiLambda_rr(lambda(1:3)); cons.subCons{2}.phiLambda_rr(lambda(4:5))];
+        end
+        function phiLambda_rp = phiLambda_rp(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to p (orientation)
+            % following technique from get.phi_r and get.phi_p
+            % phiLambda_rp : [30x8] normally, unless grounded, then [15x4]
+            % inputs:
+            %    lambda : [5x1] vector of lambda values, corresponding to
+            %    the subconstraints
+            
+            phiLambda_rp = [cons.subCons{1}.phiLambda_rp(lambda(1:3)); cons.subCons{2}.phiLambda_rp(lambda(4:5))];
+        end    
+        function phiLambda_pr = phiLambda_pr(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to r (position)
+            % following technique from get.phi_r and get.phi_p
+            % phiLambda_pr : [40x6] normally, unless grounded, then [20x3]
+            % inputs:
+            %    lambda : [5x1] vector of lambda values, corresponding to
+            %    the subconstraints
+            
+            phiLambda_pr = [cons.subCons{1}.phiLambda_pr(lambda(1:3)); cons.subCons{2}.phiLambda_pr(lambda(4:5))];
+        end
+        function phiLambda_pp = phiLambda_pp(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to p (orientation)
+            % following technique from get.phi_r and get.phi_p
+            % phiLambda_pp : [40x8] normally, unless grounded, then [20x4]
+            % inputs:
+            %    lambda : [5x1] vector of lambda values, corresponding to
+            %    the subconstraints
+            
+            phiLambda_pp = [cons.subCons{1}.phiLambda_pp(lambda(1:3)); cons.subCons{2}.phiLambda_pp(lambda(4:5))];
+        end 
+    end %methods
+end %class

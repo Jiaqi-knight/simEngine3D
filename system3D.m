@@ -115,7 +115,7 @@ classdef system3D < handle
                     error('Constraint not implemented yet.');
             end
         end
-        function assembleConstraints(sys) % construct phi matrices 
+        function assembleConstraints(sys) % add euler parameter normalization constraints and construct phi matrices 
             sys.addEulerParamConstraints(); % add euler parameter normalization constraints to system
             sys.constructPhiF();   % construct phiF matrix
             sys.constructPhiF_q();   % construct phiF_q matrix
@@ -707,6 +707,7 @@ classdef system3D < handle
                 pdot  = Cpdot + beta0*h*pddot;
                 sys.updateSystem([r; p],[rdot; pdot],[rddot; pddot]);
                 
+                
                 %%%%%%%%%%%
                 % STEP 2 : compute the residual (g) in nonlinear system, which
                 % is a function of most recent accelerations
@@ -740,12 +741,12 @@ classdef system3D < handle
                     case 'NR'
                         % Use a full NEWTON-RAPHSON iteration matrix (psi).
                         % (see slide 30, 10/17/16)
-                        psi = sys.constructPsiMatrix(h,beta0);
+                        psi = sys.constructPsiMatrix(h,beta0,lambda,lambdaP);
                     case 'MN'
                         % Use a MODIFIED-NEWTON iteration matrix (psi).
                         % (see slide 26, 10/17/16)
                         if nu == 1 % only compute once, on the first iteration
-                            psi = sys.constructPsiMatrix(h,beta0);
+                            psi = sys.constructPsiMatrix(h,beta0,lambda,lambdaP);
                         end
                     otherwise
                         error('Specified Newton Method not implemented yet.');
@@ -1161,11 +1162,14 @@ classdef system3D < handle
                 sys.TauHat((4*i-3):4*i) = TauHat;
             end
         end
-        function psi = constructPsiMatrix(sys,h,beta0) % construct the full blown Jacobian (psi) matrix used in dynamics analysis.
+        function psi = constructPsiMatrix(sys,h,beta0,lambda,lambdaP) % construct the full blown Jacobian (psi) matrix used in dynamics analysis.
             % constuct the full blown Jacobian (psi) matrix used in dynamics analysis.
             % inputs:
-            %      h: step size, in seconds
-            %  beta0: BDF constant
+            %       h: step size, in seconds
+            %   beta0: BDF constant
+            %  lambda: current lagrange multipliers of the system
+            % lambdaP: current lagrange multipliers of the system, wrt to
+            % euler parameter normalization constraints
             
             % These matrices should have been updated previous
             % to the call to construct psi: 
@@ -1187,7 +1191,7 @@ classdef system3D < handle
             TauHat_rdot = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
             
             
-            % build required terms
+            % build required terms: JpPddot_p, TauHat_p, TauHat_pdot
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
             JpPddot_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);   % preallocate for speed
             TauHat_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);    % preallocate for speed
@@ -1217,7 +1221,53 @@ classdef system3D < handle
                 TauHat_pdot(4*i-3:4*i,4*i-3:4*i) = -8*Gdot'*Jbar*G + 8*T2;  % block diagonal matrix
             end
             
-            
+            % build required terms: phiRLambda_r, phiRLambda_p, phiPLambda_r, phiPLambda_p
+            lambdaCounter = 1;
+            phiLambda_rr = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies); %preallocate for speed
+            phiLambda_rp = zeros(3*sys.nFreeBodies,4*sys.nFreeBodies); %preallocate for speed
+            phiLambda_pr = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies); %preallocate for speed
+            phiLambda_pp = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); %preallocate for speed
+            for i = 1:(sys.nConstraints-sys.rPDOF) % only kinematic and driving constraints
+                % need to send the right lambda to the right subconstraint
+                % for calculation of the partial derivative
+                nLambdas = sys.cons{i}.rDOF;
+                lambdas = lambda(lambdaCounter:lambdaCounter+nLambdas-1);
+                
+                % calculate terms for the constraint
+                phiLambda_rr_terms = sys.cons{i}.phiLambda_rr(lambdas);
+                %phiLambda_rp_terms = sys.cons{i}.phiLambda_rp(lambdas);
+                %phiLambda_pr_terms = sys.cons{i}.phiLambda_pr(lambdas);
+                %phiLambda_pp_terms = sys.cons{i}.phiLambda_pp(lambdas);
+                
+                % cycle through each term in the phiLambda_terms matrices
+                for j = 1:nLambdas;
+                    if ~sys.cons{i}.bodyi.isGround && ~sys.cons{i}.bodyj.isGround % if bodyi and bodyj are free bodies....
+                        fbNumi = find(sys.bodyIDs == sys.cons{i}.bodyi.ID); % free body number from body ID number for bodyi
+                        fbNumj = find(sys.bodyIDs == sys.cons{i}.bodyj.ID); % free body number from body ID number for bodyj
+                        %%%%%% phiLambda_rr term is [6x6];
+                        % plug in terms for phiLambda_rrii
+                        phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumi-2:3*fbNumi) = phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumi-2:3*fbNumi) + phiLambda_rr_terms(6*j-5:6*j-3,1:3);
+                        % plug in terms for phiLambda_rrjj
+                        phiLambda_rr(3*fbNumj-2:3*fbNumj,3*fbNumj-2:3*fbNumj) = phiLambda_rr(3*fbNumj-2:3*fbNumj,3*fbNumj-2:3*fbNumj) + phiLambda_rr_terms(6*j-2:6*j,4:6);
+                        % plug in terms for phiLambda_rrij
+                        phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumj-2:3*fbNumj) = phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumj-2:3*fbNumj) + phiLambda_rr_terms(6*j-5:6*j-3,4:6);
+                        % plug in terms for phiLambda_rrji
+                        phiLambda_rr(3*fbNumj-2:3*fbNumj,3*fbNumi-2:3*fbNumi) = phiLambda_rr(3*fbNumj-2:3*fbNumj,3*fbNumi-2:3*fbNumi) + phiLambda_rr_terms(6*j-2:6*j,1:3);
+                    elseif ~sys.cons{i}.bodyi.isGround % if bodyi is free and bodyj is ground
+                        fbNum = find(sys.bodyIDs == sys.cons{i}.bodyi.ID); % free body number from body ID number
+                        %%%%%% phi_Lambda_rr term is [3x3];
+                        phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) = phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) + phiLambda_rr_terms(3*j-2:3*j,1:3);
+                    elseif sys.cons{i}.bodyi.isGround % if bodyi is ground and bodyj is free....
+                        fbNum = find(sys.bodyIDs == sys.cons{i}.bodyj.ID); % free body number from body ID number
+                        %%%%%% phi_Lambda_rr term is [3x3];
+                        phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) = phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) + phiLambda_rr_terms(3*j-2:3*j,1:3);
+                    end
+                end
+                
+                
+                % set lambdaCounter for next constraint
+                lambdaCounter = lambdaCounter + nLambdas;
+            end
             
             
             % NOW I JUST NEED TO DEFINE THESE TERMS... JOY!!!
@@ -1229,11 +1279,17 @@ classdef system3D < handle
             
             
             
+            
+            
             % create psi entries (see slide 30, 10/17/16)
-            psi11 = sys.M + h^2*beta0^2*phiRLambda_r - h^2*beta0^2*F_r - h*beta0*F_rdot;
-            psi12 = h^2*beta0^2*phiRLambda_p - h^2*beta0^2*F_p - h*beta0*F_pdot;
-            psi21 = h^2*beta0^2*phiPLambda_r - h^2*beta0^2*TauHat_r - h*beta0*TauHat_rdot;
-            psi22 = sys.Jp + h^2*beta0^2*JpPddot_p + h^2*beta0^2*PLamdaP_p + h^2*beta0^2*phiPLambda_p - h^2*beta0^2*TauHat_p - h*beta0*TauHat_pdot;
+            % psi11 : [3*nFreeBodies x 3*nFreeBodies]
+            % psi12 : [3*nFreeBodies x 4*nFreeBodies]
+            % psi21 : [4*nFreeBodies x 3*nFreeBodies]
+            % psi22 : [4*nFreeBodies x 4*nFreeBodies]
+            psi11 = sys.M + h^2*beta0^2*phiLambda_rr - h^2*beta0^2*F_r - h*beta0*F_rdot;
+            psi12 = h^2*beta0^2*phiLambda_rp - h^2*beta0^2*F_p - h*beta0*F_pdot;
+            psi21 = h^2*beta0^2*phiLambda_pr - h^2*beta0^2*TauHat_r - h*beta0*TauHat_rdot;
+            psi22 = sys.Jp + h^2*beta0^2*JpPddot_p + h^2*beta0^2*PLamdaP_p + h^2*beta0^2*phiLambda_pp - h^2*beta0^2*TauHat_p - h*beta0*TauHat_pdot;
             
             % zeros matrices
             Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies);

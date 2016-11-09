@@ -114,7 +114,7 @@ classdef dp1 < handle
                        -2*(utility.Bmatrix(cons.bodyi.p,cons.aBari)*cons.bodyi.pdot)'*(utility.Bmatrix(cons.bodyj.p,cons.aBarj)*cons.bodyj.pdot) + ...
                        fddotVal;
         end
-        function phi_r = get.phi_r(cons) 
+        function phi_r = get.phi_r(cons) % get jacobian with respect to position (r)
             % from ME751_f2016 slide 13 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
             % in the Jacobian is half. there are no partial derivatives with 
@@ -133,8 +133,8 @@ classdef dp1 < handle
             else 
                 phi_r = [phi_ri, phi_rj]; 
             end
-        end
-        function phi_p = get.phi_p(cons)
+        end 
+        function phi_p = get.phi_p(cons) % get jacobian with respect to orientation (p)
             % from ME751_f2016 slide 13 from lecture 9/28/16
             % One body can be the ground. In this case, the number of columns
             % in the Jacobian is half. there are no partial derivatives with 
@@ -153,39 +153,59 @@ classdef dp1 < handle
             else 
                 phi_p = [phi_pi, phi_pj]; 
             end
-        end
-
-        function  out = phi_rLambda_r(cons,lambda)
-            %from ME751_f2016 slide 35,36 from lecture 10/17/16
+        end 
+        function  phiLambda_rr = phiLambda_rr(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to r (position)
+            % from ME751_f2016 slide 35,36 from lecture 10/17/16
+            % phiLambda_rr : [6x6] normally, unless grounded, then [3x3]
+            % inputs:
+            %    lambda : scalar value
+            
             dim_r = length(cons.phi_r);
-            out = lambda*zeros(dim_r,dim_r); % will be [3x3] or [6x6], depends on if there is a grounded body
+            phiLambda_rr = lambda*zeros(dim_r,dim_r); % [3x3] or [6x6]
         end
-        function  out = phi_rLambda_p(cons,lambda)
+        function  phiLambda_rp = phiLambda_rp(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to p (orientation)
             %from ME751_f2016 slide 35,36 from lecture 10/17/16
+            % phiLambda_rp : [6x8] normally, unless grounded, then [3x4]
+            % inputs:
+            %    lambda : scalar value
+            
             dim_r = length(cons.phi_r);
             dim_p = length(cons.phi_p);
-            out = lambda*zeros(dim_r,dim_p); % will be [3x4] or [6x8], depends on if there is a grounded body
+            phiLambda_rp = lambda*zeros(dim_r,dim_p); % [3x4] or [6x8]
         end
-        function  out = phi_pLambda_r(cons,lambda)
+        function  phiLambda_pr = phiLambda_pr(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to r (position)
             %from ME751_f2016 slide 35,36 from lecture 10/17/16
+            % phiLambda_pr : [8x6] normally, unless grounded, then [4x3]
+            % inputs:
+            %    lambda : scalar value
+            
             dim_r = length(cons.phi_r);
             dim_p = length(cons.phi_p);
-            out = lambda*zeros(dim_p,dim_r); % will be [3x4] or [6x8], depends on if there is a grounded body
+            phiLambda_pr = lambda*zeros(dim_p,dim_r); % [4x3] or [8x6]
         end
-        function  out = phi_pLambda_p(cons,lambda)
+        function  phiLambda_pp = phiLambda_pp(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to p (orientation)
             %from ME751_f2016 slide 35,36 from lecture 10/17/16
             % will be [4x4] or [8x8], depends on if there is a grounded body
+            % inputs:
+            %    lambda : scalar value
+            
+            phiLambda_ppii = utility.Kmatrix(cons.aBari,cons.bodyj.A*cons.aBarj);
+            phiLambda_ppjj = utility.Kmatrix(cons.aBarj,cons.bodyi.A*cons.aBari);
+            phiLambda_ppij = utility.Bmatrix(cons.bodyi.p,cons.aBari)'*utility.Bmatrix(cons.bodyj.p,cons.aBarj);
+            phiLambda_ppji = utility.Bmatrix(cons.bodyj.p,cons.aBarj)'*utility.Bmatrix(cons.bodyi.p,cons.aBari);
             
             if cons.bodyi.isGround
-                out = lambda*utility.Kmatrix(cons.aBari,cons.bodyj.A*cons.aBarj); % [4x4]
+                phiLambda_pp = lambda*phiLambda_ppjj; % [4x4]
             elseif cons.bodyj.isGround
-                out = lambda*utility.Kmatrix(cons.aBarj,cons.bodyi.A*cons.aBari); % [4x4]
+                phiLambda_pp = lambda*phiLambda_ppii; % [4x4]
             else % [8x8]
-                out = lambda*[utility.Kmatrix(cons.aBari,cons.bodyj.A*cons.aBarj)   utility.Bmatrix(cons.bodyi.p,cons.aBari)'*utility.Bmatrix(cons.bodyj.p,cons.aBarj);
-                              utility.Bmatrix(cons.bodyj.p,cons.aBarj)'*utility.Bmatrix(cons.bodyi.p,cons.aBari)   utility.Kmatrix(cons.aBarj,cons.bodyi.A*cons.aBari)]; 
-            end
-            
+                phiLambda_pp = lambda*[phiLambda_ppii  phiLambda_ppij;
+                                       phiLambda_ppji phiLambda_ppjj]; 
+            end 
         end
-    end
-    
-end
+    end %methods
+end %class

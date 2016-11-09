@@ -154,6 +154,82 @@ classdef dp2 < handle
                 phi_p = [phi_pi, phi_pj]; 
             end
         end
+        function  phiLambda_rr = phiLambda_rr(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to r (position)
+            % from ME751_f2016 slide 35,37 from lecture 10/17/16
+            % phiLambda_rr : [6x6] normally, unless grounded, then [3x3]
+            % inputs:
+            %    lambda : scalar value
+            
+            dim_r = length(cons.phi_r);
+            phiLambda_rr = lambda*zeros(dim_r,dim_r); % [3x3] or [6x6]
+        end
+        function  phiLambda_rp = phiLambda_rp(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to p (orientation)
+            %from ME751_f2016 slide 35,37 from lecture 10/17/16
+            % phiLambda_rp : [6x8] normally, unless grounded, then [3x4]
+            % inputs:
+            %    lambda : scalar value
+            
+            phiLambda_rpii = -utility.Bmatrix(cons.bodyi.p,cons.aBari);
+            phiLambda_rpjj = zeros(3,4);
+            phiLambda_rpij = zeros(3,4);
+            phiLambda_rpji = utility.Bmatrix(cons.bodyi.p,cons.aBari);
+            
+            if cons.bodyi.isGround
+                phiLambda_rp = lambda*phiLambda_rpjj; % [3x4]
+            elseif cons.bodyj.isGround
+                phiLambda_rp = lambda*phiLambda_rpii; % [3x4]
+            else % [6x8]
+                phiLambda_rp = lambda*[phiLambda_rpii  phiLambda_rpij;
+                                       phiLambda_rpji  phiLambda_rpjj]; 
+            end 
+        end
+        function  phiLambda_pr = phiLambda_pr(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to r (position)
+            %from ME751_f2016 slide 35,37 from lecture 10/17/16
+            % phiLambda_pr : [8x6] normally, unless grounded, then [4x3]
+            % inputs:
+            %    lambda : scalar value
+            
+            phiLambda_prii = -utility.Bmatrix(cons.bodyi.p,cons.aBari)';
+            phiLambda_prjj = zeros(4,3);
+            phiLambda_prij = utility.Bmatrix(cons.bodyi.p,cons.aBari)';
+            phiLambda_prji = zeros(4,3);
+            
+            if cons.bodyi.isGround
+                phiLambda_pr = lambda*phiLambda_prjj; % [3x4]
+            elseif cons.bodyj.isGround
+                phiLambda_pr = lambda*phiLambda_prii; % [3x4]
+            else % [6x8]
+                phiLambda_pr = lambda*[phiLambda_prii  phiLambda_prij;
+                                       phiLambda_prji  phiLambda_prjj];
+            end
+        end
+        function  phiLambda_pp = phiLambda_pp(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to p (orientation)
+            %from ME751_f2016 slide 35,37 from lecture 10/17/16
+            % will be [4x4] or [8x8], depends on if there is a grounded body
+            % inputs:
+            %    lambda : scalar value
+            Dij = utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
+            phiLambda_ppii = utility.Kmatrix(cons.aBari,Dij) + ...
+                            -utility.Kmatrix(cons.bodyi.point{cons.Pi},cons.bodyi.A*cons.aBari) + ...
+                            -utility.Bmatrix(cons.bodyi.p,cons.aBari)'*utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi}) + ...
+                            -utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi})'*utility.Bmatrix(cons.bodyi.p,cons.aBari);
+            phiLambda_ppjj = utility.Kmatrix(cons.bodyj.point{cons.Qj},cons.bodyi.A*cons.aBari);
+            phiLambda_ppij = utility.Bmatrix(cons.bodyi.p,cons.aBari)'*utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            phiLambda_ppji = utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj})'*utility.Bmatrix(cons.bodyi.p,cons.aBari);
+            
+            if cons.bodyi.isGround
+                phiLambda_pp = lambda*phiLambda_ppjj; % [4x4]
+            elseif cons.bodyj.isGround
+                phiLambda_pp = lambda*phiLambda_ppii; % [4x4]
+            else % [8x8]
+                phiLambda_pp = lambda*[phiLambda_ppii  phiLambda_ppij;
+                                       phiLambda_ppji  phiLambda_ppjj]; 
+            end 
+        end
     end
     
 end

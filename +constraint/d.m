@@ -158,6 +158,87 @@ classdef d < handle
                 phi_p = [phi_pi, phi_pj]; 
             end
         end
-    end
-    
-end
+        function  phiLambda_rr = phiLambda_rr(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to r (position)
+            % from ME751_f2016 slide 35,38 from lecture 10/17/16
+            % phiLambda_rr : [6x6] normally, unless grounded, then [3x3]
+            % inputs:
+            %    lambda : scalar value
+            
+            if cons.bodyi.isGround
+                phiLambda_rr = 2*lambda*eye(3); % [3x3]
+            elseif cons.bodyj.isGround
+                phiLambda_rr = 2*lambda*eye(3); % [3x3]
+            else % [6x6]
+                phiLambda_rr = 2*lambda*[eye(3) -eye(3);
+                                        -eye(3)  eye(3)];
+            end
+        end
+        function  phiLambda_rp = phiLambda_rp(cons,lambda)
+            % partial derivative of (phi_r*lambda) with respect to p (orientation)
+            %from ME751_f2016 slide 35,38 from lecture 10/17/16
+            % phiLambda_rp : [6x8] normally, unless grounded, then [3x4]
+            % inputs:
+            %    lambda : scalar value
+            
+            phiLambda_rpii =  utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi});
+            phiLambda_rpjj =  utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            phiLambda_rpij = -utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            phiLambda_rpji = -utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi});
+            
+            if cons.bodyi.isGround
+                phiLambda_rp = 2*lambda*phiLambda_rpjj; % [3x4]
+            elseif cons.bodyj.isGround
+                phiLambda_rp = 2*lambda*phiLambda_rpii; % [3x4]
+            else % [6x8]
+                phiLambda_rp = 2*lambda*[phiLambda_rpii  phiLambda_rpij;
+                                         phiLambda_rpji  phiLambda_rpjj];
+            end
+        end
+        function  phiLambda_pr = phiLambda_pr(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to r (position)
+            %from ME751_f2016 slide 35,38 from lecture 10/17/16
+            % phiLambda_pr : [8x6] normally, unless grounded, then [4x3]
+            % inputs:
+            %    lambda : scalar value
+            
+            phiLambda_prii =  utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi})';
+            phiLambda_prjj =  utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            phiLambda_prij = -utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi})';
+            phiLambda_prji = -utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            
+            if cons.bodyi.isGround
+                phiLambda_pr = 2*lambda*phiLambda_prjj; % [3x4]
+            elseif cons.bodyj.isGround
+                phiLambda_pr = 2*lambda*phiLambda_prii; % [3x4]
+            else % [6x8]
+                phiLambda_pr = 2*lambda*[phiLambda_prii  phiLambda_prij;
+                                         phiLambda_prji  phiLambda_prjj];
+            end
+        end
+        function  phiLambda_pp = phiLambda_pp(cons,lambda)
+            % partial derivative of (phi_p*lambda) with respect to p (orientation)
+            %from ME751_f2016 slide 35,38 from lecture 10/17/16
+            % will be [4x4] or [8x8], depends on if there is a grounded body
+            % inputs:
+            %    lambda : scalar value
+            
+            Dij = utility.dij(cons.bodyi,cons.Pi,cons.bodyj,cons.Qj);
+            phiLambda_ppii = -utility.Kmatrix(cons.bodyi.point{cons.Pi},Dij) + ...
+                              utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi})'*utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi});
+            phiLambda_ppjj =  utility.Kmatrix(cons.bodyj.point{cons.Qj},Dij) + ...
+                              utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj})'*utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            phiLambda_ppij = -utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi})'*utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj});
+            phiLambda_ppji = -utility.Bmatrix(cons.bodyj.p,cons.bodyj.point{cons.Qj})'*utility.Bmatrix(cons.bodyi.p,cons.bodyi.point{cons.Pi});
+            
+            if cons.bodyi.isGround
+                phiLambda_pp = 2*lambda*phiLambda_prjj; % [3x4]
+            elseif cons.bodyj.isGround
+                phiLambda_pp = 2*lambda*phiLambda_prii; % [3x4]
+            else % [6x8]
+                phiLambda_pp = 2*lambda*[phiLambda_ppii  phiLambda_ppij;
+                                         phiLambda_ppji  phiLambda_ppjj];
+            end
+        end
+    end % methods
+end % class

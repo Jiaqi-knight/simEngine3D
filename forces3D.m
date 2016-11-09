@@ -23,14 +23,6 @@ classdef forces3D < handle
     properties (Dependent)
         force;      % [3x1] vector, force applied at a point, expressed in GLOBAL RF
         torque;     % [3x1] vector, torque applied, expressed in BODY RF
-        %force_r;    % [3x3] matrix, partial derivative of force w.r.t. body position
-        %force_p;    % [3x4] matrix, partial derivative of force w.r.t. body orientation (euler parameters)
-        %force_rdot; % [3x3] matrix, partial derivative of force w.r.t. body velocity
-        %force_pdot; % [3x4] matrix, partial derivative of force w.r.t. body angular velocity (euler parameters)
-        %torque_r;   % [3x3] matrix, partial derivative of torque w.r.t. body position
-        %torque_p;   % [3x4] matrix, partial derivative of torque w.r.t. body orientation (euler parameters)
-        %torque_rdot;% [3x3] matrix, partial derivative of torque w.r.t. body velocity
-        %torque_pdot;% [3x4] matrix, partial derivative of torque w.r.t. body angular velocity (euler parameters)
     end
     methods
         function f = forces3D(body,forcesType,varargin) % constructor function
@@ -160,77 +152,5 @@ classdef forces3D < handle
                 end
             end
         end
-%         function force_r = get.force_r(f) % partial derivative of force w.r.t. body position
-%             % [3x3] matrix, partial derivative of force w.r.t. body position
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although force could be a function of body position (r)
-%             % At present, we are only supporting force functions of time. 
-%             % Thus, force_r will be zeros.
-%             force_r = zeros(3,3);
-%         end
-%         function force_p = get.force_p(f) % partial derivative of force w.r.t. body orientation (euler parameters)
-%             % [3x4] matrix, partial derivative of force w.r.t. body orientation (euler parameters)
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although force could be a function of body euler parameters (p)
-%             % At present, we are only supporting force functions of time. 
-%             % Thus, force_p will be zeros.
-%             force_p = zeros(3,4);
-%         end
-%         function force_rdot = get.force_rdot(f) % partial derivative of force w.r.t. body velocity
-%             % [3x3] matrix, partial derivative of force w.r.t. body velocity
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although force could be a function of body velocity (rdot)
-%             % At present, we are only supporting force functions of time. 
-%             % Thus, force_rdot will be zeros.
-%             force_rdot = zeros(3,3);
-%         end
-%         function force_pdot = get.force_pdot(f) % partial derivative of force w.r.t. body angular velocity (euler parameters)
-%             % [3x4] matrix, partial derivative of force w.r.t. body angular velocity (euler parameters)
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although force could be a function of body angular velocity (pdot)
-%             % At present, we are only supporting force functions of time. 
-%             % Thus, force_pdot will be zeros.
-%             force_pdot = zeros(3,4);
-%         end
-%         function torque_r = get.torque_r(f) % partial derivative of torque w.r.t. body position
-%             % [3x3] matrix, partial derivative of torque w.r.t. body position
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although torque could be a function of body position (r)
-%             % At present, we are only supporting torque functions of time. 
-%             % Thus, torque_r will be zeros.
-%             torque_r = zeros(3,3);
-%         end
-%         function torque_p = get.torque_p(f) % partial derivative of torque w.r.t. body orientation (euler parameters)
-%             % [3x4] matrix, partial derivative of torque w.r.t. body orientation (euler parameters)
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although torque could be a function of body euler parameters (p)
-%             % At present, we are only supporting torque functions of time. 
-%             % Thus, torque_p will be zeros.
-%             torque_p = zeros(3,4);
-%         end
-%         function torque_rdot = get.torque_rdot(f) % partial derivative of torque w.r.t. body velocity
-%             % [3x3] matrix, partial derivative of torque w.r.t. body velocity
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although torque could be a function of body velocity (rdot)
-%             % At present, we are only supporting torque functions of time. 
-%             % Thus, torque_rdot will be zeros.
-%             torque_rdot = zeros(3,3);
-%         end
-%         function torque_pdot = get.torque_pdot(f) % partial derivative of torque w.r.t. body orientation (euler parameters)
-%             % [3x4] matrix, partial derivative of torque w.r.t. body angular velocity (euler parameters)
-%             % see ME751_f2016 slide 33 from lecture 10/17/16
-%             
-%             % NOTE: although torque could be a function of body angular velocity (pdot)
-%             % At present, we are only supporting torque functions of time. 
-%             % Thus, torque_pdot will be zeros.
-%             torque_pdot = zeros(3,4);
-%         end
     end
 end
