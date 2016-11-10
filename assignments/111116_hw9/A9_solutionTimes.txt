@@ -1,0 +1,12 @@
+Single Pendulum (with driving constraint)
+For step-size h=0.01 seconds,
+Time to compute Newton-Raphson Solution: 162.0619 seconds
+Time to compute Modified-Newton Solution: 99.0034 seconds
+Time to compute Quasi-Newton Solution: 77.2395 seconds
+
+Double Pendulum
+For step-size h=0.01 seconds,
+Time to compute Newton-Raphson Solution: 259.6613 seconds
+Time to compute Modified-Newton Solution: 166.5632 seconds
+Time to compute Quasi-Newton Solution: 140.3524 seconds
+

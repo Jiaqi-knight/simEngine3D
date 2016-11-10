@@ -266,7 +266,7 @@ classdef system3D < handle
                 disp(['Inverse dynamics analysis completed for t = ' num2str(t) ' sec.']);
             end
         end
-        function state = dynamicsAnalysis(sys,timeStart,timeEnd,timeStep,newtonMethod) % perform dynamics analysis
+        function state = dynamicsAnalysis(sys,timeStart,timeEnd,timeStep,newtonMethod,storeVelocityViolations) % perform dynamics analysis
             % perform dynamics analysis on the system. System must be not be
             % fully constrained (nDOF > 0).
             %
@@ -291,6 +291,9 @@ classdef system3D < handle
             if ~exist('newtonMethod','var') || isempty(newtonMethod)
                 newtonMethod = 'QN'; % default newton method is Quasi-Newton
             end
+            if ~exist('storeVelocityViolations','var') || isempty(storeVelocityViolations)
+                storeVelocityViolations = 0; % default is NOT store velocity violations during calculations
+            end
             
             timeGrid = timeStart:timeStep:timeEnd; % establish time grid
             state = cell(length(timeGrid),1); % preallocate for saved state
@@ -303,34 +306,39 @@ classdef system3D < handle
             sys.checkInitialConditions();
             sys.findInitialAccelerations();
             state{1} = sys.getSystemState(); % store initial system state: (iT = 1)
+            state{1}.nIterations = 1; % for consitency, although number of iterations to converge doesnt apply here
             disp(['Dynamics analysis completed for t = ' num2str(sys.time) ' sec.'])    
             
-            % store violation of the velocity constraints (optional)
-            state{1}.velocityViolation = sys.violationVelocityConstraints();
+            if storeVelocityViolations % store violation of the velocity constraints (optional)
+                state{1}.velocityViolation = sys.violationVelocityConstraints();
+            end
             
             %%%%%%%%%%% 
             % using initial conditions,
             % find first time step using Quasi-Newton method and BDF of order 1
             iT = 2; % first integration step
             sys.setSystemTime(timeGrid(iT)); % set system time
-            sys.BDF_dynamicsAnalysis(1,newtonMethod,timeStep,state{1}); % ORDER 1 BDF, Quasi-Newton method, send initial state
+            nIterations = sys.BDF_dynamicsAnalysis(1,newtonMethod,timeStep,state{1}); % ORDER 1 BDF, send initial state
             state{2} = sys.getSystemState();
+            state{2}.nIterations = nIterations; % number of iterations to converge in BDF dynamics analysis
             disp(['Dynamics analysis completed for t = ' num2str(sys.time) ' sec.'])
             
-            % store violation of the velocity constraints (optional)
-            state{2}.velocityViolation = sys.violationVelocityConstraints();
+            if storeVelocityViolations % store violation of the velocity constraints (optional)
+                state{2}.velocityViolation = sys.violationVelocityConstraints();
+            end
             
             % iterate throughout the time grid:
             for iT = 3:length(timeGrid)
                 t = timeGrid(iT); % current time step
                 sys.setSystemTime(t); % set system time
-                sys.BDF_dynamicsAnalysis(2,newtonMethod,timeStep,state{iT-1},state{iT-2}); % ORDER 2 BDF, Quasi-Newton method, send past two states
+                nIterations = sys.BDF_dynamicsAnalysis(2,newtonMethod,timeStep,state{iT-1},state{iT-2}); % ORDER 2 BDF, send past two states
                 state{iT} = sys.getSystemState();
-                
+                state{iT}.nIterations = nIterations; % number of iterations to converge in BDF dynamics analysis
                 disp(['Dynamics analysis completed for t = ' num2str(t) ' sec.']);
                 
-                % store violation of the velocity constraints (optional)
-                state{iT}.velocityViolation = sys.violationVelocityConstraints();
+                if storeVelocityViolations % store violation of the velocity constraints (optional)
+                    state{iT}.velocityViolation = sys.violationVelocityConstraints();
+                end
             end
         end %dynamicsAnalysis
         function addGravityForces(sys) % add gravity force to body
@@ -625,7 +633,7 @@ classdef system3D < handle
            
 
         end
-        function BDF_dynamicsAnalysis(sys,orderNum,newtonMethod,h,varargin) % BDF Solution of the Dynamics Analysis Problem
+        function nu = BDF_dynamicsAnalysis(sys,orderNum,newtonMethod,h,varargin) % BDF Solution of the Dynamics Analysis Problem
             % Backwards Difference Formula, using a newton method
             % see ME751_f2016, slides 18-22, 10/14/16
             % also see ME751_f2016, slide 43, 10/17/16
@@ -643,6 +651,9 @@ classdef system3D < handle
             %                most recent to least recent...
             %                varargin{1} : state1 : structure of system values at previous time step, t(n-1)
             %                varargin{2} : state2 : structure of system values at previous time step, t(n-2)
+            % OUTPUTS:
+            %           nu : iteration count, how many iterations it took
+            %                to converge on the solution
             
             % solver parameters
             maxIterations = 50; % 50;
@@ -768,12 +779,11 @@ classdef system3D < handle
                 
                 %%%%%%%%%%%
                 % STEP 5 : if the norm of the correction is small enough,
-                % go to step 6. Otherwise
-                nu = nu + 1;
-                
+                % go to step 6. Otherwise, loop
                 if norm(deltaZ) < tolerance
                     break;
                 end
+                nu = nu + 1;
             end
             if nu >= maxIterations % notify of failed convergence
                 warning(['Did not converge in Quasi-Newton iteration, BDF1. Time = ' num2str(sys.time)]);
@@ -1175,6 +1185,7 @@ classdef system3D < handle
             % to the call to construct psi: 
             % sys.phi_r, sys.phi_p, sys.P, sys.F, sys.TauHat
             
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % although forces could be a function of r, rdot, p, and pdot...
             % At present, we are only supporting force functions of time. 
             % Thus, F_r, F_p, F_rdot, F_pdot will be zeros.
@@ -1190,7 +1201,7 @@ classdef system3D < handle
             TauHat_r    = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
             TauHat_rdot = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
             
-            
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % build required terms: JpPddot_p, TauHat_p, TauHat_pdot
             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
             JpPddot_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);   % preallocate for speed
@@ -1213,14 +1224,15 @@ classdef system3D < handle
                 TauHat_p(4*i-3:4*i,4*i-3:4*i) = 8*Gdot'*Jbar*Gdot;  % block diagonal matrix
                 
                 %%%% find TauHat_pdot (see slide 26, lecture 10/05/16)
-                %%%% See slide 34 from lecture 10/17/16 for similar
-                %%%% derivation for finding partial of 8*Gdot'*Jbar*Gdot*p
-                %%%% with respect to pdot
+                % See slide 34 from lecture 10/17/16 for similar
+                % derivation for finding partial of 8*Gdot'*Jbar*Gdot*p
+                % with respect to pdot
                 a2 = Jbar*Gdot*p;
                 T2 = [0 -a2'; a2 -utility.tilde(a2)];
                 TauHat_pdot(4*i-3:4*i,4*i-3:4*i) = -8*Gdot'*Jbar*G + 8*T2;  % block diagonal matrix
             end
             
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % build required terms: phiRLambda_r, phiRLambda_p, phiPLambda_r, phiPLambda_p
             lambdaCounter = 1;
             phiLambda_rr = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies); %preallocate for speed
@@ -1235,15 +1247,17 @@ classdef system3D < handle
                 
                 % calculate terms for the constraint
                 phiLambda_rr_terms = sys.cons{i}.phiLambda_rr(lambdas);
-                %phiLambda_rp_terms = sys.cons{i}.phiLambda_rp(lambdas);
-                %phiLambda_pr_terms = sys.cons{i}.phiLambda_pr(lambdas);
-                %phiLambda_pp_terms = sys.cons{i}.phiLambda_pp(lambdas);
+                phiLambda_rp_terms = sys.cons{i}.phiLambda_rp(lambdas);
+                phiLambda_pr_terms = sys.cons{i}.phiLambda_pr(lambdas);
+                phiLambda_pp_terms = sys.cons{i}.phiLambda_pp(lambdas);
                 
                 % cycle through each term in the phiLambda_terms matrices
                 for j = 1:nLambdas;
                     if ~sys.cons{i}.bodyi.isGround && ~sys.cons{i}.bodyj.isGround % if bodyi and bodyj are free bodies....
+                        % set body indexs for easy reference
                         fbNumi = find(sys.bodyIDs == sys.cons{i}.bodyi.ID); % free body number from body ID number for bodyi
                         fbNumj = find(sys.bodyIDs == sys.cons{i}.bodyj.ID); % free body number from body ID number for bodyj
+                        
                         %%%%%% phiLambda_rr term is [6x6];
                         % plug in terms for phiLambda_rrii
                         phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumi-2:3*fbNumi) = phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumi-2:3*fbNumi) + phiLambda_rr_terms(6*j-5:6*j-3,1:3);
@@ -1253,34 +1267,69 @@ classdef system3D < handle
                         phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumj-2:3*fbNumj) = phiLambda_rr(3*fbNumi-2:3*fbNumi,3*fbNumj-2:3*fbNumj) + phiLambda_rr_terms(6*j-5:6*j-3,4:6);
                         % plug in terms for phiLambda_rrji
                         phiLambda_rr(3*fbNumj-2:3*fbNumj,3*fbNumi-2:3*fbNumi) = phiLambda_rr(3*fbNumj-2:3*fbNumj,3*fbNumi-2:3*fbNumi) + phiLambda_rr_terms(6*j-2:6*j,1:3);
-                    elseif ~sys.cons{i}.bodyi.isGround % if bodyi is free and bodyj is ground
-                        fbNum = find(sys.bodyIDs == sys.cons{i}.bodyi.ID); % free body number from body ID number
+                        
+                        %%%%%% phi_Lambda_rp term is [6x8];
+                        % plug in terms for phiLambda_rpii
+                        phiLambda_rp(3*fbNumi-2:3*fbNumi,4*fbNumi-3:4*fbNumi) = phiLambda_rp(3*fbNumi-2:3*fbNumi,4*fbNumi-3:4*fbNumi) + phiLambda_rp_terms(6*j-5:6*j-3,1:4);
+                        % plug in terms for phiLambda_rpjj
+                        phiLambda_rp(3*fbNumj-2:3*fbNumj,4*fbNumj-3:4*fbNumj) = phiLambda_rp(3*fbNumj-2:3*fbNumj,4*fbNumj-3:4*fbNumj) + phiLambda_rp_terms(6*j-2:6*j,5:8);
+                        % plug in terms for phiLambda_rpij
+                        phiLambda_rp(3*fbNumi-2:3*fbNumi,4*fbNumj-3:4*fbNumj) = phiLambda_rp(3*fbNumi-2:3*fbNumi,4*fbNumj-3:4*fbNumj) + phiLambda_rp_terms(6*j-5:6*j-3,5:8);
+                        % plug in terms for phiLambda_rpji
+                        phiLambda_rp(3*fbNumj-2:3*fbNumj,4*fbNumi-3:4*fbNumi) = phiLambda_rp(3*fbNumj-2:3*fbNumj,4*fbNumi-3:4*fbNumi) + phiLambda_rp_terms(6*j-2:6*j,1:4);
+                        
+                        %%%%%% phi_Lambda_pr term is [8x6];
+                        % plug in terms for phiLambda_prii
+                        phiLambda_pr(4*fbNumi-3:4*fbNumi,3*fbNumi-2:3*fbNumi) = phiLambda_pr(4*fbNumi-3:4*fbNumi,3*fbNumi-2:3*fbNumi) + phiLambda_pr_terms(8*j-7:8*j-4,1:3);
+                        % plug in terms for phiLambda_prjj
+                        phiLambda_pr(4*fbNumj-3:4*fbNumj,3*fbNumj-2:3*fbNumj) = phiLambda_pr(4*fbNumj-3:4*fbNumj,3*fbNumj-2:3*fbNumj) + phiLambda_pr_terms(8*j-3:8*j,4:6);
+                        % plug in terms for phiLambda_prij
+                        phiLambda_pr(4*fbNumi-3:4*fbNumi,3*fbNumj-2:3*fbNumj) = phiLambda_pr(4*fbNumi-3:4*fbNumi,3*fbNumj-2:3*fbNumj) + phiLambda_pr_terms(8*j-7:8*j-4,4:6);
+                        % plug in terms for phiLambda_prji
+                        phiLambda_pr(4*fbNumj-3:4*fbNumj,3*fbNumi-2:3*fbNumi) = phiLambda_pr(4*fbNumj-3:4*fbNumj,3*fbNumi-2:3*fbNumi) + phiLambda_pr_terms(8*j-3:8*j,1:3);
+                        
+                        %%%%%% phi_Lambda_pp term is [8x8];
+                        % plug in terms for phiLambda_prii
+                        phiLambda_pp(4*fbNumi-3:4*fbNumi,4*fbNumi-3:4*fbNumi) = phiLambda_pp(4*fbNumi-3:4*fbNumi,4*fbNumi-3:4*fbNumi) + phiLambda_pp_terms(8*j-7:8*j-4,1:4);
+                        % plug in terms for phiLambda_prjj
+                        phiLambda_pp(4*fbNumj-3:4*fbNumj,4*fbNumj-3:4*fbNumj) = phiLambda_pp(4*fbNumj-3:4*fbNumj,4*fbNumj-3:4*fbNumj) + phiLambda_pp_terms(8*j-3:8*j,5:8);
+                        % plug in terms for phiLambda_prij
+                        phiLambda_pp(4*fbNumi-3:4*fbNumi,4*fbNumj-3:4*fbNumj) = phiLambda_pp(4*fbNumi-3:4*fbNumi,4*fbNumj-3:4*fbNumj) + phiLambda_pp_terms(8*j-7:8*j-4,5:8);
+                        % plug in terms for phiLambda_prji
+                        phiLambda_pp(4*fbNumj-3:4*fbNumj,4*fbNumi-3:4*fbNumi) = phiLambda_pp(4*fbNumj-3:4*fbNumj,4*fbNumi-3:4*fbNumi) + phiLambda_pp_terms(8*j-3:8*j,1:4);
+                        
+                    else % either bodyi is free or bodyj is free
+                        % set body index for easy reference, depending on
+                        % which body is ground
+                        if ~sys.cons{i}.bodyi.isGround % bodyi is free and bodyj is ground
+                            fbNum = find(sys.bodyIDs == sys.cons{i}.bodyi.ID); % free body number from body ID number
+                        else % bodyi is ground and bodyj is free
+                            fbNum = find(sys.bodyIDs == sys.cons{i}.bodyj.ID); % free body number from body ID number
+                        end
                         %%%%%% phi_Lambda_rr term is [3x3];
                         phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) = phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) + phiLambda_rr_terms(3*j-2:3*j,1:3);
-                    elseif sys.cons{i}.bodyi.isGround % if bodyi is ground and bodyj is free....
-                        fbNum = find(sys.bodyIDs == sys.cons{i}.bodyj.ID); % free body number from body ID number
-                        %%%%%% phi_Lambda_rr term is [3x3];
-                        phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) = phiLambda_rr(3*fbNum-2:3*fbNum,3*fbNum-2:3*fbNum) + phiLambda_rr_terms(3*j-2:3*j,1:3);
+                        %%%%%% phi_Lambda_rp term is [3x4];
+                        phiLambda_rp(3*fbNum-2:3*fbNum,4*fbNum-3:4*fbNum) = phiLambda_rp(3*fbNum-2:3*fbNum,4*fbNum-3:4*fbNum) + phiLambda_rp_terms(3*j-2:3*j,1:4);
+                        %%%%%% phi_Lambda_pr term is [4x3];
+                        phiLambda_pr(4*fbNum-3:4*fbNum,3*fbNum-2:3*fbNum) = phiLambda_pr(4*fbNum-3:4*fbNum,3*fbNum-2:3*fbNum) + phiLambda_pr_terms(4*j-3:4*j,1:3);
+                        %%%%%% phi_Lambda_pp term is [4x4];
+                        phiLambda_pp(4*fbNum-3:4*fbNum,4*fbNum-3:4*fbNum) = phiLambda_pp(4*fbNum-3:4*fbNum,4*fbNum-3:4*fbNum) + phiLambda_pp_terms(4*j-3:4*j,1:4);
                     end
                 end
-                
-                
                 % set lambdaCounter for next constraint
                 lambdaCounter = lambdaCounter + nLambdas;
             end
             
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % build required term: PLamdaP_p, this was derived by hand
+            % trying to follow the same process as the other partial
+            % derivatives
+            PLambdaP_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); %preallocate for speed
+            for i = 1:sys.nFreeBodies
+                PLambdaP_p(4*i-3:4*i,4*i-3:4*i) = lambdaP(i)*eye(4);
+            end
             
-            % NOW I JUST NEED TO DEFINE THESE TERMS... JOY!!!
-            %             phiRLambda_r
-            %             phiRLambda_p
-            %             phiPLambda_r
-            %             phiPLambda_p
-            %             PLamdaP_p
-            
-            
-            
-            
-            
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % create psi entries (see slide 30, 10/17/16)
             % psi11 : [3*nFreeBodies x 3*nFreeBodies]
             % psi12 : [3*nFreeBodies x 4*nFreeBodies]
@@ -1289,98 +1338,19 @@ classdef system3D < handle
             psi11 = sys.M + h^2*beta0^2*phiLambda_rr - h^2*beta0^2*F_r - h*beta0*F_rdot;
             psi12 = h^2*beta0^2*phiLambda_rp - h^2*beta0^2*F_p - h*beta0*F_pdot;
             psi21 = h^2*beta0^2*phiLambda_pr - h^2*beta0^2*TauHat_r - h*beta0*TauHat_rdot;
-            psi22 = sys.Jp + h^2*beta0^2*JpPddot_p + h^2*beta0^2*PLamdaP_p + h^2*beta0^2*phiLambda_pp - h^2*beta0^2*TauHat_p - h*beta0*TauHat_pdot;
+            psi22 = sys.Jp + h^2*beta0^2*JpPddot_p + h^2*beta0^2*PLambdaP_p + h^2*beta0^2*phiLambda_pp - h^2*beta0^2*TauHat_p - h*beta0*TauHat_pdot;
             
             % zeros matrices
             Z2 = zeros(sys.nFreeBodies,3*sys.nFreeBodies);
             Z3 = zeros(sys.nFreeBodies);
             Z4 = zeros(sys.rKDOF,sys.nFreeBodies);
-            Z5 = zeros(sys.rKDOF);
-            
+            Z5 = zeros(sys.rKDOF);            
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % construct psi, (see slide 30, 10/17/16)
             psi = [    psi11      psi12      Z2'  sys.phi_r';
                        psi21      psi22   sys.P'  sys.phi_p';
                           Z2      sys.P      Z3          Z4';
-                   sys.phi_r  sys.phi_p      Z4          Z5];
-            
-        end
-        function [F_r, F_p, F_rdot, F_pdot, TauHat_r, TauHat_p, TauHat_rdot, TauHat_pdot] = buildPartialDerivativesOfForces(sys) % partial derivatives of sys.F and sys.TauHat
-            % for the current system time step, construct the partial
-            % derivatives of sys.F and sys.TauHat
-            % these partial derivatives are with respect to r,p,rdot,pdot
-            
-            % based on: 
-            % ME751_f2016 slide 33 from lecture 10/17/16
-            % ME751_f2016 slide 26-27 from lecture 10/05/16
-            
-            F_r         = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies);
-            F_p         = zeros(3*sys.nFreeBodies,4*sys.nFreeBodies); 
-            F_rdot      = zeros(3*sys.nFreeBodies,3*sys.nFreeBodies); 
-            F_pdot      = zeros(3*sys.nFreeBodies,4*sys.nFreeBodies); 
-            TauHat_r    = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
-            TauHat_p    = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);
-            TauHat_rdot = zeros(4*sys.nFreeBodies,3*sys.nFreeBodies);
-            TauHat_pdot = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies);
-            
-%             bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
-%             for i = 1:sys.nFreeBodies % iterate through every free body
-%                 %iF_r    = zeros(3,3); % iterative F_r
-%                 %iF_p    = zeros(3,4); % iterative F_p
-%                 %iF_rdot = zeros(3,3); % iterative F_r
-%                 %iF_pdot = zeros(3,4); % iterative F_p
-%                 
-%                 for j = 1:sys.body{bodyID(i)}.nForces
-%                     % sum partial derivatives acting on that body
-%                     %iF_r    = iF_r + sys.body{bodyID(i)}.forces{j}.force_r; %[3x3]
-%                     %iF_p    = iF_p + sys.body{bodyID(i)}.forces{j}.force_p; %[3x4]
-%                     %iF_rdot = iF_rdot + sys.body{bodyID(i)}.forces{j}.force_rdot; %[3x3]
-%                     %iF_pdot = iF_pdot + sys.body{bodyID(i)}.forces{j}.force_pdot; %[3x4]
-%                     
-%                     % sum active and gravitational torques acting
-%                     nBar = nBar + sys.body{bodyID(i)}.forces{j}.torque; 
-%                 end
-%                 
-% %                 p = sys.body{bodyID(i)}.p; % pull euler parameters
-% %                 J = sys.body{bodyID(i)}.Jbar; % pull inertia tensor
-% %                 G = utility.Gmatrix(p); % calc G matrix
-% %                 Gdot = utility.Gmatrix(sys.body{bodyID(i)}.pdot); % calc Gdot matrix
-% %                 G_r = zeros()
-% %                 TauHat_p = 8*Gdot'*J*Gdot*p;
-%                 
-%                 % plug sums into final terms
-%                 %F_r((3*i-2):3*i,(3*i-2):3*i)    = iF_r;
-%                 %F_p((3*i-2):3*i,(4*i-3):4*i)    = iF_p;
-%                 %F_rdot((3*i-2):3*i,(3*i-2):3*i) = iF_rdot;
-%                 %F_pdot((3*i-2):3*i,(4*i-3):4*i) = iF_pdot;
-%             end
-        end
-        function JpPddot_p = buildJpPddot_p(sys) % build partial derivative JpPddot_p
-            % this is a term used in the construction of Newton Raphson psi
-            % matrix. 
-            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
-            JpPddot_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
-            for i = 1:sys.nFreeBodies % iterate through every free body
-                %%%% find JpPddot_p (see slide 34, lecture 10/17/16)
-                p = sys.body{bodyID(i)}.p;
-                pddot = sys.body{bodyID(i)}.pddot;
-                Jbar = sys.body{bodyID(i)}.Jbar;
-                a = Jbar*utility.Gmatrix(p)*pddot;
-                T = [0 -a'; a -utility.tilde(a)];
-                JpPddot_p(4*i-3:4*i,4*i-3:4*i) = 4*(T-utility.Gmatrix(p)'*Jbar*utility.Gmatrix(pddot));
-            end
-        end
-        function TauHat_p = buildTauHat_p(sys) % build partial derivative TauHat_p
-            % this is a term used in the construction of Newton Raphson psi
-            % matrix. 
-            bodyID   = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
-            TauHat_p = zeros(4*sys.nFreeBodies,4*sys.nFreeBodies); % preallocate for speed
-            
-            for i = 1:sys.nFreeBodies % iterate through every free body
-                %%%% find TauHat_p (see slide 26, lecture 10/05/16)
-                Jbar = sys.body{bodyID(i)}.Jbar;
-                Gdot = utility.Gmatrix(sys.body{bodyID(i)}.pdot);
-                TauHat_p(4*i-3:4*i,4*i-3:4*i) = 8*Gdot'*Jbar*Gdot;  % block diagonal matrix
-            end
+                   sys.phi_r  sys.phi_p      Z4          Z5];            
         end
     end
     methods % methods block with no attributes

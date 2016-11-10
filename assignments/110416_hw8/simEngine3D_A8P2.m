@@ -109,7 +109,7 @@ timeStart = 0; %seconds
 timeEnd =  10;
 timeStep = 10^-2; %10^-3;
 tic
-state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep);
+state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep,'QN',1);
 toc
 
 %save('state_A8P2.mat','state')
