@@ -39,8 +39,8 @@ classdef utility
                 e3 = (A(2,1)-A(1,2))/(4*e0);
 
             elseif e0 == 0
-                disp('Not implemented yet, see slide 25 (9/21/16) or page 341')
-                return
+                error('Not implemented yet, see slide 25 (9/21/16) or page 341')
+                % at least one of e1, e2, and e3 is nonzero
             end
             
             p =[e0;e1;e2;e3];
