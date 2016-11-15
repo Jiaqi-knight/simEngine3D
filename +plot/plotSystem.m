@@ -1,4 +1,4 @@
-function plotSystem(sys,frames)
+function plotSystem(sys,frames,scale)
 % plotSystem  plots the bodies in the simEngine3D system.
 %
 %	DRAWFRAME(sys)
@@ -10,10 +10,12 @@ function plotSystem(sys,frames)
 %
 
 
-if nargin == 1
+if nargin < 2
     frames = 0;
 end
-
+if nargin < 3
+    scale = 1;
+end
 
 
 figure()
@@ -22,7 +24,7 @@ fig.Color = [1 1 1]; % set background color to white
 
 %% PLOT GLOBAL REFERENCE FRAME
 
-plot.drawframe(sys.r_global,sys.p_global,0.5,1) % plot GLOBAL RF
+plot.drawframe(sys.r_global,sys.p_global,scale*0.5,1) % plot GLOBAL RF
 xlabel('X');
 ylabel('Y');
 zlabel('Z');
@@ -43,14 +45,14 @@ for i = 1:sys.nBodies % plot bodies in system
     %optionally plot body reference frames
     if frames 
         if sys.body{i}.isGround
-            plot.drawframe(sys.body{i}.r,sys.body{i}.p,[],2)
+            plot.drawframe(sys.body{i}.r,sys.body{i}.p,scale,2)
         else
-            plot.drawframe(sys.body{i}.r,sys.body{i}.p)
+            plot.drawframe(sys.body{i}.r,sys.body{i}.p,scale)
         end
     end
     
     % add body labels
-    r_text = r + 0.3; %adjust so label is not right over body origin
+    r_text = r + scale*0.3; %adjust so label is not right over body origin
     if sys.body{i}.isGround
         text(r_text(1),r_text(2),r_text(3),['Body ' num2str(sys.body{i}.ID) ', ground'],'FontWeight','bold');
     else
@@ -67,7 +69,7 @@ for i = 1:sys.nBodies % plot bodies in system
             plot3([r(1); rAsbar(1)],[r(2); rAsbar(2)],[r(3); rAsbar(3)],'ks-','MarkerSize',12) % line from BODY RF to point
             
             % add point labels
-            rAsbar_text = rAsbar + 0.1; %adjust so label is not right over point
+            rAsbar_text = rAsbar + scale*0.1; %adjust so label is not right over point
             textLabel = ['B' num2str(i) 'P' num2str(j)];
             if length(texts) > 0
                 for k = 1:length(texts)

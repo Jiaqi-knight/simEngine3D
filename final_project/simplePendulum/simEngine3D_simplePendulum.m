@@ -93,7 +93,7 @@ disp(['Time to compute Quasi-Newton Solution: ' num2str(timeQN) ' seconds'])
 % Time to compute Quasi-Newton Solution: 59.8413 seconds
 
 % pull benchmark data
-benchmark = load('A01_solution_data.txt');
+benchmark = load('benchmark_A01_solution_data.txt');
 benchmark_time = benchmark(:,1);
 benchmark_X = benchmark(:,2);
 benchmark_Y = benchmark(:,3);

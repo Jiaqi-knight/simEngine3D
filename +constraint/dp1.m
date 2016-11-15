@@ -37,7 +37,7 @@ classdef dp1 < handle
     
     methods
         %constructor function
-        function cons = dp1(system,bodyi,PiID,QiID,bodyj,PjID,QjID,f,fdot,fddot,t) %constructor function
+        function cons = dp1(system,bodyi,PiID,QiID,bodyj,PjID,QjID,f,fdot,fddot) %constructor function
             if ~exist('f','var') || isempty(f)
                 f = 0; % prescribed constraint is 0, indicating vectors are orthogonal
             end
