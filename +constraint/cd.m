@@ -35,7 +35,7 @@ classdef cd < handle
     
     methods
         %constructor function
-        function cons = cd(system,cName,bodyi,PiID,bodyj,QjID,f,fdot,fddot,t) %constructor function
+        function cons = cd(system,cName,bodyi,PiID,bodyj,QjID,f,fdot,fddot) %constructor function
             if ~exist('f','var') || isempty(f)
                 f = 0; % prescribed difference is 0
             end

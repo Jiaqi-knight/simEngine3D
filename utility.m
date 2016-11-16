@@ -57,6 +57,24 @@ classdef utility
             %theta = theta*pi/180; %convert to radians
             R3 = [cos(theta) -sin(theta) 0; sin(theta) cos(theta) 0; 0 0 1];
         end
+        function pdot = w2pdot(w,p) % angular velocity to euler parameters
+            % see ME751_f2016 slide 15 from lecture 09/23/16
+            % inputs:
+            %   w : [3x1], angular velocity in the BODY RF
+            %   p : [4x1], euler parameters of the body
+            % outputs:
+            % pdot: [4x1], derivative of euler parameters wrt time
+            pdot = 0.5*utility.Gmatrix(p)'*w;
+        end
+        function w = pdot2w(pdot,p) % euler parameters to angular velocity
+            % see ME751_f2016 slide 14 from lecture 09/23/16
+            % inputs:
+            % pdot: [4x1], derivative of euler parameters wrt time
+            %   p : [4x1], euler parameters of the body
+            % outputs:
+            %   w : [3x1], angular velocity in the BODY RF
+            w = 2*utility.Gmatrix(p)*pdot;
+        end
         function a_tilde = tilde(a) % returns algebraic vector outer product matrix (cross product)
             % input:
             %   a = [a1;a2;a3] 
