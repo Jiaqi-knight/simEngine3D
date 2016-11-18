@@ -111,17 +111,27 @@ classdef system3D < handle
                     sys.cons{ID} = constraint.sj(sys,varargin{:}); % new instance of constraint.sj class
                 case 'rj'
                     sys.cons{ID} = constraint.rj(sys,varargin{:}); % new instance of constraint.rj class
+                case 'cj'
+                    sys.cons{ID} = constraint.cj(sys,varargin{:}); % new instance of constraint.cj class
+                case 'tj'
+                    sys.cons{ID} = constraint.tj(sys,varargin{:}); % new instance of constraint.tj class
+                case 'rcj'
+                    sys.cons{ID} = constraint.rcj(sys,varargin{:}); % new instance of constraint.rcj class
                 otherwise
                     error('Constraint not implemented yet.');
             end
         end
         function assembleConstraints(sys) % add euler parameter normalization constraints and construct phi matrices 
             sys.addEulerParamConstraints(); % add euler parameter normalization constraints to system
-            sys.constructPhiF();   % construct phiF matrix
-            sys.constructPhiF_q();   % construct phiF_q matrix
+            %sys.constructQ();     % construct q (r and p) of bodies in system
+            
+            %sys.positionAnalysis() % solve for initial positions
+            
+            %sys.constructPhiF();   % construct phiF matrix
+            %sys.constructPhiF_q();   % construct phiF_q matrix
             sys.constructNuF();    % construct RHS of velocity equation
             sys.constructGammaHatF();%construct RHS of acceleration equation
-            sys.constructQ();     % construct q (r and p) of bodies in system
+            
             sys.constructPhi_q(); % construct phi_r & phi_p 
         end
         function state = kinematicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform kinematics analysis
@@ -394,6 +404,86 @@ classdef system3D < handle
                     sys.cons{ID} = constraint.p_norm(sys,sys.body{i}); % new instance of constraint.p_norm class
                     ID = ID+1;
                 end
+            end
+        end
+        function assemblyAnalysis(sys,tolerance,maxIterations) % assembly analysis of the system
+            % sometimes it is not easy to exactly specify the initial
+            % positions of a mechanism. Assembly analysis allows you to
+            % specify initial estimates of the positions, and then solves
+            % for actual initial positions, or informs you that the system
+            % cannot be assembled. In this case, either the estimates were
+            % too far off, or the configuration is not possible.
+            %
+            % This algorithm comes from Haug's book section 4.3 
+            % (pgs 130-131)
+            
+            if ~exist('tolerance','var') || isempty(tolerance)
+                tolerance = 1e-9;  % default tolerance
+            end
+            if ~exist('maxIterations','var') || isempty(maxIterations)
+                maxIterations = 50; % default maximum iterations
+            end
+            
+            sys.constructQ(); % construct q (r and p) of bodies in system
+            
+            % WORKING ON THE R ITERATION NOW!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            r = 10; %weighting constant;
+            
+            %%%%%%%%%%%%%%%%%
+            % step 1: begin with estimate of q and H
+            q0 = sys.q; 
+            q = q0;
+            H = eye(length(q));
+            sys.constructPhiF();   % construct phiF matrix
+            sys.constructPhiF_q();   % construct phiF_q matrix
+            
+            % minimization options
+            opt = optimset('fminunc');
+            opt = optimset(opt,'display','off');
+            
+            warning('off','optim:fminunc:SwitchingMethod');
+            for i = 1:maxIterations % iterate
+                %%%%%%%%%%%%%%%%%
+                % step 2: at iteration i, compute s
+                
+                %sys.updateSystem(q,[],[]);% update bodies
+                psi_q = 2*(q-q0)' + 2*r*sys.phiF'*sys.phiF_q;
+                s = -H*psi_q';
+                
+                %%%%%%%%%%%%%%%%%
+                % step 3: Use a one-dimensional search algorithm to find alpha
+                % that minimizes psi
+                alpha = fminunc(@(alpha)sumsqr(q+alpha*s),0,opt);
+                                
+                %%%%%%%%%%%%%%%%%
+                % step 4: compute q_new, H_new
+                q_new = q + alpha*s;
+                
+                sys.updateSystem(q_new,[],[]);% update bodies
+                sys.constructPhiF();   % construct phiF matrix
+                sys.constructPhiF_q();   % construct phiF_q matrix
+                psi_q_new = 2*(q_new-q0)' + 2*r*sys.phiF'*sys.phiF_q;               
+                y = psi_q_new' - psi_q';
+                A = (alpha/(s'*y))*(s*s');
+                C = -(1/(y'*H*y))*H*(y*y')*H;
+                H_new = H + A + C;
+                
+                %%%%%%%%%%%%%%%%%
+                % step 5: if psi_q_new = 0 or q_new-q is small, terminate.
+                % Otherwise, return to step 2 for new iteration.
+                q_error = q_new-q;
+                q = q_new;
+                H = H_new;
+                if (norm(psi_q_new) < tolerance) || (norm(q_error) < tolerance) %check for convergence
+                    break;
+                end
+            end
+            if i >= maxIterations
+                errormsg = ['Failed to converge assembly analysis, the maximum number of iterations is reached.\n '...
+                    'There are two possible conclusions from this failed convergence:\n '...
+                    '1. The initial estimates of position was not capable of converging.\n '...
+                    '2. It is impossible for this system to be assembled.'];
+                error(sprintf(errormsg));
             end
         end
         function positionAnalysis(sys,tolerance,maxIterations) % position analysis of system
@@ -910,7 +1000,7 @@ classdef system3D < handle
             sys.time = t;
         end
     end
-    methods (Access = private) % methods for constructing system terms 
+    methods (Access = public) % methods for constructing system terms 
         function constructPhi(sys) % construct phi matrix (kinematic & driving constraints)
             % phi = [(rKDOF) x 1]
             sys.phi = zeros(sys.rKDOF,1); % initialize phi for speed

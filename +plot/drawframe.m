@@ -63,7 +63,7 @@ switch style
         quiver3(r(1),r(2),r(3),z(1),z(2),z(3),'Color',color,'LineWidth',lineWidth);
         
         % label the frame axes
-        Atext = scale*A +0.05;
+        Atext = scale*A + scale*0.05;
         text(Atext(1,1),Atext(2,1),Atext(3,1), 'X');
         text(Atext(1,2),Atext(2,2),Atext(3,2), 'Y');
         text(Atext(1,3),Atext(2,3),Atext(3,3), 'Z');
