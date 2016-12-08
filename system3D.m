@@ -122,17 +122,17 @@ classdef system3D < handle
             end
         end
         function assembleConstraints(sys) % add euler parameter normalization constraints and construct phi matrices 
-            sys.addEulerParamConstraints(); % add euler parameter normalization constraints to system
-            %sys.constructQ();     % construct q (r and p) of bodies in system
+            sys.constructQ();     % construct q (r and p) of bodies in system
             
-            %sys.positionAnalysis() % solve for initial positions
+            %sys.assemblyAnalysis(); % put position estimates to valid values
             
-            %sys.constructPhiF();   % construct phiF matrix
-            %sys.constructPhiF_q();   % construct phiF_q matrix
+            sys.constructPhiF();   % construct phiF matrix
+            sys.constructPhiF_q();   % construct phiF_q matrix
             sys.constructNuF();    % construct RHS of velocity equation
             sys.constructGammaHatF();%construct RHS of acceleration equation
             
             sys.constructPhi_q(); % construct phi_r & phi_p 
+           
         end
         function state = kinematicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform kinematics analysis
             % perform kinematics analysis on the system. System must be
@@ -425,60 +425,78 @@ classdef system3D < handle
             end
             
             sys.constructQ(); % construct q (r and p) of bodies in system
+            q0 = sys.q;
             
-            % WORKING ON THE R ITERATION NOW!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            r = 10; %weighting constant;
+            r = 0; %weighting constant;
+            qr_old = q0;
             
-            %%%%%%%%%%%%%%%%%
-            % step 1: begin with estimate of q and H
-            q0 = sys.q; 
-            q = q0;
-            H = eye(length(q));
-            sys.constructPhiF();   % construct phiF matrix
-            sys.constructPhiF_q();   % construct phiF_q matrix
-            
-            % minimization options
-            opt = optimset('fminunc');
-            opt = optimset(opt,'display','off');
-            
-            warning('off','optim:fminunc:SwitchingMethod');
-            for i = 1:maxIterations % iterate
-                %%%%%%%%%%%%%%%%%
-                % step 2: at iteration i, compute s
+            % iterate as r goes to infinity (eq 4.3.3)
+            for j = 1:maxIterations 
+                r = r + 1
                 
-                %sys.updateSystem(q,[],[]);% update bodies
-                psi_q = 2*(q-q0)' + 2*r*sys.phiF'*sys.phiF_q;
-                s = -H*psi_q';
+                sys.updateSystem(q0,[],[]);% update bodies to initial guess
                 
                 %%%%%%%%%%%%%%%%%
-                % step 3: Use a one-dimensional search algorithm to find alpha
-                % that minimizes psi
-                alpha = fminunc(@(alpha)sumsqr(q+alpha*s),0,opt);
-                                
-                %%%%%%%%%%%%%%%%%
-                % step 4: compute q_new, H_new
-                q_new = q + alpha*s;
-                
-                sys.updateSystem(q_new,[],[]);% update bodies
+                % step 1: begin with estimate of q and H
+                q = q0;
+                H = eye(length(q));
                 sys.constructPhiF();   % construct phiF matrix
                 sys.constructPhiF_q();   % construct phiF_q matrix
-                psi_q_new = 2*(q_new-q0)' + 2*r*sys.phiF'*sys.phiF_q;               
-                y = psi_q_new' - psi_q';
-                A = (alpha/(s'*y))*(s*s');
-                C = -(1/(y'*H*y))*H*(y*y')*H;
-                H_new = H + A + C;
                 
-                %%%%%%%%%%%%%%%%%
-                % step 5: if psi_q_new = 0 or q_new-q is small, terminate.
-                % Otherwise, return to step 2 for new iteration.
-                q_error = q_new-q;
-                q = q_new;
-                H = H_new;
-                if (norm(psi_q_new) < tolerance) || (norm(q_error) < tolerance) %check for convergence
-                    break;
+                % minimization options
+                opt = optimset('fminunc');
+                opt = optimset(opt,'display','off');
+                
+                warning('off','optim:fminunc:SwitchingMethod');
+                for i = 1:maxIterations % iterate
+                    %%%%%%%%%%%%%%%%%
+                    % step 2: at iteration i, compute s
+                    
+                    
+                    psi_q = 2*(q-q0)' + 2*r*sys.phiF'*sys.phiF_q;
+                    s = -H*psi_q';
+                    
+                    %%%%%%%%%%%%%%%%%
+                    % step 3: Use a one-dimensional search algorithm to find alpha
+                    % that minimizes psi
+                    alpha = fminunc(@(alpha)sumsqr(q+alpha*s),0,opt);
+                    
+                    %%%%%%%%%%%%%%%%%
+                    % step 4: compute q_new, H_new
+                    q_new = q + alpha*s;
+                    
+                    sys.updateSystem(q_new,[],[]);% update bodies
+                    sys.constructPhiF();   % construct phiF matrix
+                    sys.constructPhiF_q();   % construct phiF_q matrix
+                    psi_q_new = 2*(q_new-q0)' + 2*r*sys.phiF'*sys.phiF_q;
+                    y = psi_q_new' - psi_q';
+                    A = (alpha/(s'*y))*(s*s');
+                    C = -(1/(y'*H*y))*H*(y*y')*H;
+                    H_new = H + A + C;
+                    
+                    %%%%%%%%%%%%%%%%%
+                    % step 5: if psi_q_new = 0 or q_new-q is small, terminate.
+                    % Otherwise, return to step 2 for new iteration.
+                    q_error = q_new-q;
+                    q = q_new;
+                    H = H_new;
+                    if (norm(psi_q_new) < tolerance) || (norm(q_error) < tolerance) %check for convergence
+                        break;
+                    end
                 end
+                if i >= maxIterations
+                    errormsg = 'Failed to converge conjugate gradient minimization algorithm for assembly analysis';
+                    error(errormsg);
+                end
+                
+                % check if r loop has converged
+                if norm(q - qr_old) < tolerance 
+                    disp('Assembly analysis complete.')
+                    break
+                end
+                qr_old = q;
             end
-            if i >= maxIterations
+            if j >= maxIterations
                 errormsg = ['Failed to converge assembly analysis, the maximum number of iterations is reached.\n '...
                     'There are two possible conclusions from this failed convergence:\n '...
                     '1. The initial estimates of position was not capable of converging.\n '...

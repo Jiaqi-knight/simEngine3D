@@ -65,8 +65,10 @@ axis equal
 % revolute joint with ground body
 sys.addConstraint('rj',sys.body{1},1,1,2,1,3,sys.body{2},2,1,3)
 
+% add euler parameter normalization constraints to system
+sys.addEulerParamConstraints(); 
 
-%% ASSEMBLE CONSTRAINT MATRIX (and add euler parameter normalization constraints)
+%% ASSEMBLE CONSTRAINT MATRIX 
 sys.assembleConstraints()
 
 %% ADD FORCES

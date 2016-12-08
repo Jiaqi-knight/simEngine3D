@@ -142,6 +142,9 @@ sys.addConstraint('tj',sys.body{3},1,1,4,1,5,sys.body{4},5,5,7,5,6); % consisten
 
 % distance constraint: connecting rod to slider (table 10.2.5)
 sys.addConstraint('d',sys.body{2},3,sys.body{3},6,0.01); % consistent
+
+% add euler parameter normalization constraints to system
+sys.addEulerParamConstraints(); 
 return
 %% ASSEMBLE CONSTRAINT MATRIX (and add euler parameter normalization constraints)
 sys.assembleConstraints()
