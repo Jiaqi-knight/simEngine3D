@@ -106,26 +106,27 @@ for i = 1:N
     sys.addConstraint('cd','x',sys.body{driverLink_index},3,sys.body{couplerLink_index},3);
     sys.addConstraint('cd','y',sys.body{driverLink_index},3,sys.body{couplerLink_index},3);
 end
+
+% EULER PARAMETER NORMALIZATION CONSTRAINTS
+sys.addEulerParamConstraints(); 
+
+%% ASSEMBLE CONSTRAINT MATRIX
+sys.assembleConstraints();
+
 %% INITIAL CONDITIONS 
 
-% initial velocity at top left corner 
+% from initial velocity at top left corner 
 vel0 = 1; %m/s
-sys.body{N+2}.rdot = [vel0;0;0]; %initial velocity of driver link body
-
-% initial constraints?
-fdot = @(t)(~sign(t)*vel0); % only at initial time
-sys.cons{1}.subCons{1}.subCons{1}.fdot = fdot;
-fdot2 = @(t)(~sign(t)*-vel0); % only at initial time
-sys.cons{N+2}.subCons{1}.subCons{1}.fdot = fdot2;
+w0 = [0;0;-1]; % rad/2
+sys.body{N+2}.rdot = [vel0/2;0;0]; %initial velocity of driver link body
+sys.body{N+2}.pdot = utility.w2pdot(w0,sys.body{N+2}.p);
 
 
-%% ASSEMBLE CONSTRAINT MATRIX (and add euler parameter normalization constraints)
-sys.assembleConstraints()
+sys.setInitialVelocities(); % find initial velocities of constrained bodies
 
 %% ADD FORCES
 sys.g = [0;-9.81;0];
 sys.addGravityForces();
-
 
 %% DYNAMICS ANALYSIS
 timeStart = 0; %seconds
@@ -232,7 +233,7 @@ disp(['Y coordinate: There are ' num2str(nlpc_y) ' entries outside of allowable 
 
 
 %% ANIMATION OF SYSTEM
-play animation of the dynamics analysis
+%play animation of the dynamics analysis
 plot.animateSystem(sys,state);
 
 
