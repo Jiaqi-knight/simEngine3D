@@ -121,18 +121,21 @@ classdef system3D < handle
                     error('Constraint not implemented yet.');
             end
         end
-        function assembleConstraints(sys) % add euler parameter normalization constraints and construct phi matrices 
+        function assembleConstraints(sys,q_assembled) % construct system level attributes from bodies
+            % if a consistent assembly is known, plug in q_assembled.
+            % Otherwise, just use positions of bodies as you initially
+            % specified them. If these positions are not consistent, run an
+            % assembly analysis.
+            if exist('q_assembled','var') && ~isempty(q_assembled)
+                sys.updateSystem(q_assembled,[],[]); % set system to specified positions
+            end
             sys.constructQ();     % construct q (r and p) of bodies in system
-            
-            %sys.assemblyAnalysis(); % put position estimates to valid values
-            
             sys.constructPhiF();   % construct phiF matrix
             sys.constructPhiF_q();   % construct phiF_q matrix
             sys.constructNuF();    % construct RHS of velocity equation
             sys.constructGammaHatF();%construct RHS of acceleration equation
-            
             sys.constructPhi_q(); % construct phi_r & phi_p 
-           
+            sys.constructPMatrix();
         end
         function state = kinematicsAnalysis(sys,timeStart,timeEnd,timeStep) % perform kinematics analysis
             % perform kinematics analysis on the system. System must be
@@ -357,6 +360,78 @@ classdef system3D < handle
                 sys.body{i}.addForceOfGravity(); % add gravity force to body
             end
         end
+        function setInitialVelocities(sys) % set initial velocity for the system
+            % find the remaining initial velocities for bodies in the
+            % system, given at least one body has an initial velocity
+            
+            %%% find bodies with non-zero initial velocities (rdot & pdot)
+            bodyID = sys.bodyIDs; % get ID's of bodies that are not grounded (free bodies)
+            knownVelocityBodies = [];
+            freeBodyOrder = [];
+            for i = 1:sys.nFreeBodies
+                if any([sys.body{bodyID(i)}.rdot; sys.body{bodyID(i)}.pdot])
+                    knownVelocityBodies = [knownVelocityBodies bodyID(i)];
+                end
+                freeBodyOrder = [freeBodyOrder bodyID(i)];
+            end
+            nKnownVelocityBodies = length(knownVelocityBodies);
+            nUnknownVelocityBodies = sys.nFreeBodies - nKnownVelocityBodies;
+            if nUnknownVelocityBodies == 0; error('All bodies have initial velocities prescribed already.'); end;
+            if nKnownVelocityBodies == 0; error('At least one body must have initial velocities prescribed.'); end;
+            
+            %%% construct necessary matrices
+            sys.assembleConstraints();
+            
+            %%% extract columns of bodies with known velocities
+            phi_r_reduced = sys.phi_r;
+            phi_p_reduced = sys.phi_p;
+            P_reduced = sys.P;
+            rmBodies = find(ismember(freeBodyOrder, knownVelocityBodies)); %find body columns to be removed
+            rmColumnsR = [];
+            rmColumnsP = [];
+            for i = 1:length(rmBodies)
+                rmColumnsR = [rmColumnsR (3*rmBodies(i)-2) (3*rmBodies(i)-1) (3*rmBodies(i))];
+                rmColumnsP = [rmColumnsP (4*rmBodies(i)-3) (4*rmBodies(i)-2) (4*rmBodies(i)-1) (4*rmBodies(i))];
+            end
+            phi_r_extracted = phi_r_reduced(:,rmColumnsR); % extract for use in RHS
+            phi_p_extracted = phi_p_reduced(:,rmColumnsP);
+            P_extracted = P_reduced(:,rmColumnsP);
+            phi_r_reduced(:,rmColumnsR) = []; % remove from LHS
+            phi_p_reduced(:,rmColumnsP) = [];
+            P_reduced(:,rmColumnsP) = [];
+            P_reduced(rmBodies,:) = [];
+            
+            %%% assemble known initial velocities
+            rdot_initial = [];
+            pdot_initial = [];
+            for i = 1:nKnownVelocityBodies
+                rdot_initial = [rdot_initial; sys.body{knownVelocityBodies(i)}.rdot];
+                pdot_initial = [pdot_initial; sys.body{knownVelocityBodies(i)}.pdot];
+            end
+            
+            %%% velocity analysis
+            Z = zeros(nUnknownVelocityBodies,3*nUnknownVelocityBodies);
+            LHS = [phi_r_reduced phi_p_reduced; Z P_reduced ];
+            
+            nu_initial = sys.nu - phi_r_extracted*rdot_initial - phi_p_extracted*pdot_initial;
+            RHS = [ nu_initial; zeros(nUnknownVelocityBodies,1)];
+            
+            calcVel = LHS\RHS; % solve for unknown velocities
+            calcVel_rdot = calcVel(1:3*nUnknownVelocityBodies);
+            calcVel_pdot = calcVel(3*nUnknownVelocityBodies+1:7*nUnknownVelocityBodies);
+            
+            %%% construct qddot (calculated + prescribed velocities)
+            rdot = sys.rdot; % with prescribed already included
+            pdot = sys.pdot; % with prescribed already included
+            addBodies = find(~ismember(freeBodyOrder, knownVelocityBodies)); %find body columns to be removed
+            for i = 1:length(addBodies)
+                rdot(3*addBodies(i)-2:3*addBodies(i)) = calcVel_rdot(3*i-2:3*i);
+                pdot(4*addBodies(i)-3:4*addBodies(i)) = calcVel_pdot(4*i-3:4*i);
+            end
+                      
+            %%% update system
+            sys.updateSystem([],[rdot; pdot],[]); % set system velocities
+        end
         function checkInitialConditions(sys,tolerance) % check that initial conditions satisfy the prescribed constraints
             % (ME751_f2016, slide 40-42, lecture 10/17/16)
             % initial conditions must satisfy constraint equations, or we
@@ -406,7 +481,7 @@ classdef system3D < handle
                 end
             end
         end
-        function assemblyAnalysis(sys,tolerance,maxIterations) % assembly analysis of the system
+        function q_assembled = assemblyAnalysis(sys,r_scale,tolerance,maxIterations) % assembly analysis of the system
             % sometimes it is not easy to exactly specify the initial
             % positions of a mechanism. Assembly analysis allows you to
             % specify initial estimates of the positions, and then solves
@@ -415,86 +490,60 @@ classdef system3D < handle
             % too far off, or the configuration is not possible.
             %
             % This algorithm comes from Haug's book section 4.3 
-            % (pgs 130-131)
+            % (pgs 130-131), although I ended up using a built-in matlab
+            % optimization function.
             
+            if ~exist('r_scale','var') || isempty(r_scale)
+                r_scale = 2; % default maximum iterations
+            end
             if ~exist('tolerance','var') || isempty(tolerance)
-                tolerance = 1e-9;  % default tolerance
+                tolerance = 1e-8;  % default tolerance
             end
             if ~exist('maxIterations','var') || isempty(maxIterations)
                 maxIterations = 50; % default maximum iterations
             end
             
+            disp(['Conducting assembly analysis...   ramping up r by ' num2str(r_scale)]);
+            
             sys.constructQ(); % construct q (r and p) of bodies in system
             q0 = sys.q;
             
-            r = 0; %weighting constant;
-            qr_old = q0;
+            r = 1; % start value for weighting constant
+                        
+            % optimization options
+            opt = optimset('fminunc'); 
+            opt = optimset(opt,'display','off');
+            opt = optimset(opt,'GradObj','on');
+            %warning('off','optim:fminunc:SwitchingMethod');
             
             % iterate as r goes to infinity (eq 4.3.3)
             for j = 1:maxIterations 
-                r = r + 1
+                disp(['     r = ' num2str(r) ', minimizing q']);
+                % initial estimate is initial guess q0
                 
                 sys.updateSystem(q0,[],[]);% update bodies to initial guess
-                
-                %%%%%%%%%%%%%%%%%
-                % step 1: begin with estimate of q and H
-                q = q0;
-                H = eye(length(q));
                 sys.constructPhiF();   % construct phiF matrix
                 sys.constructPhiF_q();   % construct phiF_q matrix
                 
-                % minimization options
-                opt = optimset('fminunc');
-                opt = optimset(opt,'display','off');
-                
-                warning('off','optim:fminunc:SwitchingMethod');
-                for i = 1:maxIterations % iterate
-                    %%%%%%%%%%%%%%%%%
-                    % step 2: at iteration i, compute s
-                    
-                    
-                    psi_q = 2*(q-q0)' + 2*r*sys.phiF'*sys.phiF_q;
-                    s = -H*psi_q';
-                    
-                    %%%%%%%%%%%%%%%%%
-                    % step 3: Use a one-dimensional search algorithm to find alpha
-                    % that minimizes psi
-                    alpha = fminunc(@(alpha)sumsqr(q+alpha*s),0,opt);
-                    
-                    %%%%%%%%%%%%%%%%%
-                    % step 4: compute q_new, H_new
-                    q_new = q + alpha*s;
-                    
-                    sys.updateSystem(q_new,[],[]);% update bodies
-                    sys.constructPhiF();   % construct phiF matrix
-                    sys.constructPhiF_q();   % construct phiF_q matrix
-                    psi_q_new = 2*(q_new-q0)' + 2*r*sys.phiF'*sys.phiF_q;
-                    y = psi_q_new' - psi_q';
-                    A = (alpha/(s'*y))*(s*s');
-                    C = -(1/(y'*H*y))*H*(y*y')*H;
-                    H_new = H + A + C;
-                    
-                    %%%%%%%%%%%%%%%%%
-                    % step 5: if psi_q_new = 0 or q_new-q is small, terminate.
-                    % Otherwise, return to step 2 for new iteration.
-                    q_error = q_new-q;
-                    q = q_new;
-                    H = H_new;
-                    if (norm(psi_q_new) < tolerance) || (norm(q_error) < tolerance) %check for convergence
-                        break;
-                    end
-                end
-                if i >= maxIterations
-                    errormsg = 'Failed to converge conjugate gradient minimization algorithm for assembly analysis';
-                    error(errormsg);
-                end
+                % instead of using Haug's algorithm, use built in
+                % optimization routine
+                [q_new, fMin, exitflag, output] = fminunc(@(q)sys.constructAssemblyAnalysisPsi(q,q0,r), q0, opt);
                 
                 % check if r loop has converged
-                if norm(q - qr_old) < tolerance 
+                q_error = norm(q_new - q0);
+                disp(['     q_error = ' num2str(q_error) ]);
+                if q_error < tolerance
+                    sys.updateSystem(q_new,[],[]);% update bodies to final q
+                    sys.constructPhiF();   
+                    sys.constructPhiF_q();   
+                    q_assembled = q_new;
                     disp('Assembly analysis complete.')
                     break
                 end
-                qr_old = q;
+                sys.q
+                % otherwise, iterate
+                q0 = q_new;
+                r = r_scale+r; % r must go to infinity, so ramping seems a fair way to get there.
             end
             if j >= maxIterations
                 errormsg = ['Failed to converge assembly analysis, the maximum number of iterations is reached.\n '...
@@ -1459,6 +1508,28 @@ classdef system3D < handle
                        psi21      psi22   sys.P'  sys.phi_p';
                           Z2      sys.P      Z3          Z4';
                    sys.phi_r  sys.phi_p      Z4          Z5];            
+        end
+        function [psi, psi_q] = constructAssemblyAnalysisPsi(sys,q,q0,r)% construct minimization function for assembly analysis
+            % assembly analysis requires the minimization of eq 4.3.2,
+            % called Psi. See Haug chapter 4.3, pages 130-131.
+            % note: this is not the full blown jacobian psi from
+            % constructPsiMatrix above.
+            % inputs:
+            %   sys     The multibody system
+            %     q     The current positions and euler parameters
+            %    q0     The original positions and euler parameters
+            %     r     weighting factor
+            % Outputs:
+            %   psi     equation 4.3.2
+            % psi_q     gradient, equation 4.3.4
+            
+            sys.updateSystem(q,[],[]);% update bodies to initial guess
+            sys.constructPhiF();   % construct phiF matrix
+            sys.constructPhiF_q();   % construct phiF_q matrix
+            
+            psi = (q-q0)'*(q-q0) + r*sys.phiF'*sys.phiF;
+            psi_q = 2*(q-q0)' + 2*r*sys.phiF'*sys.phiF_q;
+            
         end
     end
     methods % methods block with no attributes

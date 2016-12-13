@@ -29,64 +29,42 @@ R = utility.R1(pi/2);
 p_body = utility.A2p(R); % euler parameter
 sys.addBody('free',r_body,p_body);
 
+sys.body{1}.setMass(0.12); %kg
+J = zeros(3); 
+J(1,1) = 0.0001;
+J(2,2) = 0.00001;
+J(3,3) = 0.0001;
+sys.body{1}.setInertia(J);
+
+
 % body 2, connecting rod
 r_body = [0.1; 0.05; 0.1];
 p_body = [0.9;-0.21;0.4;-0.1]; % euler parameter estimate
 sys.addBody('free',r_body,p_body);
 
+sys.body{1}.setMass(0.5); %kg
+J = zeros(3); 
+J(1,1) = 0.0004;
+J(2,2) = 0.004;
+J(3,3) = 0.004;
+sys.body{1}.setInertia(J);
+
 % body 3, slider
 r_body = [0.2; 0; 0];
 sys.addBody('free',r_body);
 
+sys.body{1}.setMass(0.12); %kg
+J = zeros(3); 
+J(1,1) = 0.0001;
+J(2,2) = 0.0001;
+J(3,3) = 0.0001;
+sys.body{1}.setInertia(J);
+
 % body 4, ground
 sys.addBody('ground') 
 
-% % set body 2 mass
-% mass = 1; %kg
-% sys.body{2}.setMass(mass);
-% 
-% % set body 2 inertia
-% J = zeros(3); % point mass has no inertia 
-% sys.body{2}.setInertia(J);
-
-
 %% DEFINE POINTS ON THE BODIES %%
 % these are used to specify heads and tails of vectors
-
-% % crank
-% sys.body{1}.addPoint([ 0;    0; 0]); % body 1, point 1, 10.2.1 P
-% sys.body{1}.addPoint([ 1;    0; 0]); % body 1, point 2, 10.2.1 Q
-% sys.body{1}.addPoint([ 0;    0; 1]); % body 1, point 3, 10.2.1 R
-% sys.body{1}.addPoint([ 0; 0.08; 0]); % body 1, point 4, 10.2.2 P
-% sys.body{1}.addPoint([ 0; 0.08; 1]); % body 1, point 5, 10.2.2 Q
-% sys.body{1}.addPoint([ 1; 0.08; 0]); % body 1, point 6, 10.2.2 R
-% 
-% % connecting rod
-% sys.body{2}.addPoint([     0; 0; 0]); % body 2, point 1
-% sys.body{2}.addPoint([ -0.15; 0; 0]); % body 2, point 2, 10.2.2 P
-% sys.body{2}.addPoint([ -0.15; 0; 1]); % body 2, point 3, 10.2.2 Q
-% sys.body{2}.addPoint([  1.15; 0; 0]); % body 2, point 4, 10.2.2 R, 10.2.3 R
-% sys.body{2}.addPoint([  0.15; 0; 0]); % body 2, point 5, 10.2.3 P, 10.2.5 P
-% sys.body{2}.addPoint([  0.15; 1; 0]); % body 2, point 6, 10.2.3 Q, 10.2.5 Q
-% sys.body{2}.addPoint([  0.15; 0; 1]); % body 2, point 7, 10.2.5 R 
-% 
-% % slider
-% sys.body{3}.addPoint([   0; 0; 0]); % body 2, point 1, 10.2.4 P
-% sys.body{3}.addPoint([   1; 0; 0]); % body 2, point 2, 10.2.4 Q, 10.2.5 P
-% sys.body{3}.addPoint([   0; 1; 0]); % body 2, point 3, 10.2.4 R
-% sys.body{3}.addPoint([ 0.2; 0; 0]); % body 2, point 4, 10.2.3 P
-% sys.body{3}.addPoint([ 1.2; 0; 0]); % body 2, point 5, 10.2.3 Q
-% sys.body{3}.addPoint([ 0.2; 1; 0]); % body 2, point 6, 10.2.3 R
-% sys.body{3}.addPoint([   1; 1; 0]); % body 2, point 7, 10.2.5 Q
-% sys.body{3}.addPoint([   1; 0; 1]); % body 2, point 8, 10.2.5 R
-% 
-% % ground
-% sys.body{4}.addPoint([   0;   0;    0]); % body 4, point 1
-% sys.body{4}.addPoint([   0; 0.1; 0.12]); % body 4, point 2, 10.2.1 P, 10.2.1 R
-% sys.body{4}.addPoint([   1; 0.1; 0.12]); % body 4, point 3, 10.2.1 Q
-% sys.body{4}.addPoint([ 0.2;   0;    0]); % body 4, point 4, 10.2.4 P
-% sys.body{4}.addPoint([ 1.2;   0;    0]); % body 4, point 5, 10.2.4 Q
-% sys.body{4}.addPoint([ 0.2;   1;    0]); % body 4, point 6, 10.2.4 R
 
 % crank
 sys.body{1}.addPoint([    0;    0; 0]); % body 1, point 1
@@ -123,7 +101,7 @@ sys.body{4}.addPoint([ 0.20; 0.01;    0]); % body 4, point 7
 sys.plot(0,0.05) % plot with reference frames
 view(121,16);
 axis equal
-return
+
 %% DEFINE CONSTRAINTS AMONG THE BODIES %%
 
 % KINEMATIC CONSTRAINTS
@@ -145,9 +123,12 @@ sys.addConstraint('d',sys.body{2},3,sys.body{3},6,0.01); % consistent
 
 % add euler parameter normalization constraints to system
 sys.addEulerParamConstraints(); 
-return
-%% ASSEMBLE CONSTRAINT MATRIX (and add euler parameter normalization constraints)
-sys.assembleConstraints()
+
+%% ASSEMBLE CONSTRAINT MATRIX 
+
+%q_assembled = sys.assemblyAnalysis(1.2)
+%save('q_assembled.mat',q_assembled)
+%sys.assembleConstraints(q_assembled)
 return
 %% ADD FORCES
 sys.g = [0;-9.81;0];
