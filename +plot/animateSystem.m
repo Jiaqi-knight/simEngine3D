@@ -1,4 +1,4 @@
-function animateSystem(sys,state,viewAngle)
+function animateSystem(sys,state,viewAngle,frameStep)
 % simple animation of system3D.
 % INPUTS:
 %   sys   : system3D object
@@ -9,7 +9,9 @@ function animateSystem(sys,state,viewAngle)
 if ~exist('viewAngle','var') || isempty(viewAngle)
     viewAngle = [98,12];
 end
-
+if ~exist('frameStep','var') || isempty(frameStep)
+    frameStep = 1;
+end
 % determine time step
 timeStep = state{2}.time-state{1}.time;
 
@@ -121,7 +123,7 @@ pause;
 
 % animate through time
 propertyCell = {'XData','YData','ZData'};
-for i = 1:length(state)
+for i = 1:frameStep:length(state)
     % update bodies
     set(bodyHandles,propertyCell,rBodies{i});
     

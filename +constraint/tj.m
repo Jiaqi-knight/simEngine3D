@@ -27,6 +27,7 @@ classdef tj < handle
         aBarj_head; % ID number for point aBarj_head on body j, head of aBarj vector
         cBarj_tail; % ID number for point cBarj_tail on body j, tail of cBarj vector
         cBarj_head; % ID number for point cBarj_head on body j, head of cBarj vector
+        dp1_const;      % dot product between aBari and aBarj, by default = 0
         subCons; % cell array of sub-constraints
     end
     properties (Dependent)
@@ -40,7 +41,12 @@ classdef tj < handle
     methods
         %constructor function
         function cons = tj(system,bodyi,PiID,aBari_tail,aBari_head,bBari_tail,bBari_head,...
-                           bodyj,QjID,aBarj_tail,aBarj_head,cBarj_tail,cBarj_head) %constructor function
+                           bodyj,QjID,aBarj_tail,aBarj_head,cBarj_tail,cBarj_head,dp1_const) %constructor function
+            if ~exist('dp1_const','var') || isempty(dp1_const)
+                dp1_const = 0; % prescribed constraint is 0, indicating vectors are orthogonal
+            end
+                       
+                       
             cons.system = system;
             cons.bodyi = bodyi;
             cons.Pi = PiID;
@@ -54,13 +60,14 @@ classdef tj < handle
             cons.aBarj_head = aBarj_head;
             cons.cBarj_tail = cBarj_tail;
             cons.cBarj_head = cBarj_head;
+            cons.dp1_const = dp1_const;
             
             % create cell array of all sub constraints
             % from ME751_f2016 slide 31 from lecture 09/26/16
             cons.subCons{1} = constraint.cj(cons.system,cons.bodyi,cons.Pi,cons.aBari_tail,cons.aBari_head,cons.bBari_tail,cons.bBari_head,...
                            cons.bodyj,cons.Qj,cons.cBarj_tail,cons.cBarj_head);
             cons.subCons{2} = constraint.dp1(cons.system,cons.bodyi,cons.aBari_tail,cons.aBari_head,...
-                cons.bodyj,cons.aBarj_tail,cons.aBarj_head);
+                cons.bodyj,cons.aBarj_tail,cons.aBarj_head,cons.dp1_const);
             
             if abs(cons.phi) > 1e-4
                 warning('Initial conditions for ''tj'' are not consistent. But solution will converge so constraints are satisfied.')

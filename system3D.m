@@ -37,6 +37,7 @@ classdef system3D < handle
         lambdaP;        % lagrange multipliers of the system, from euler parameter constraints
         rForce;         % reaction forces for each body in system
         rTorque;        % reaction torques for each body in system
+        tsda;           % tsda objects in the system
         g;              % vector of acceleration due to gravity
         time;           % current time within the system
     end
@@ -55,6 +56,7 @@ classdef system3D < handle
         nGroundBodies;      % number of grounded bodies in the system
         nConstraints;       % number of constraints in the system
         nForces;            % count number of forces/torques applied to bodies
+        nTSDAs;             % count number of TSDA objects in the system
         nGenCoordinates;    % number of generalized coordinates in system
         nConstrainedDOF;    % number of degrees of freedom that have been constrained
         rKDOF;              % number of degrees of freedom removed by kinematic and driving constraints
@@ -66,7 +68,8 @@ classdef system3D < handle
         function sys = system3D() %constructor function
             sys.body = {}; % no bodies defined yet
             sys.cons = {}; % no constraints defined yet
-                        
+            sys.tsda = {}; % no TSDA's defined yet
+            
             % empty for now, constructed later as needed
             sys.q = [];
             sys.qdot = [];
@@ -120,6 +123,10 @@ classdef system3D < handle
                 otherwise
                     error('Constraint not implemented yet.');
             end
+        end
+        function addTSDA(sys,varargin) % add TSDA object to the system
+            ID = sys.nTSDAs + 1; % TSDA ID number
+            sys.tsda{ID} = tsda3D(sys,varargin{:}); % new instance of the tsda class
         end
         function assembleConstraints(sys,q_assembled) % construct system level attributes from bodies
             % if a consistent assembly is known, plug in q_assembled.
@@ -377,58 +384,69 @@ classdef system3D < handle
             nKnownVelocityBodies = length(knownVelocityBodies);
             nUnknownVelocityBodies = sys.nFreeBodies - nKnownVelocityBodies;
             if nUnknownVelocityBodies == 0; error('All bodies have initial velocities prescribed already.'); end;
-            if nKnownVelocityBodies == 0; error('At least one body must have initial velocities prescribed.'); end;
+            if nKnownVelocityBodies == 0; warning('At least one body must have initial velocities prescribed.'); end;
             
             %%% construct necessary matrices
             sys.assembleConstraints();
             
-            %%% extract columns of bodies with known velocities
-            phi_r_reduced = sys.phi_r;
-            phi_p_reduced = sys.phi_p;
-            P_reduced = sys.P;
-            rmBodies = find(ismember(freeBodyOrder, knownVelocityBodies)); %find body columns to be removed
-            rmColumnsR = [];
-            rmColumnsP = [];
-            for i = 1:length(rmBodies)
-                rmColumnsR = [rmColumnsR (3*rmBodies(i)-2) (3*rmBodies(i)-1) (3*rmBodies(i))];
-                rmColumnsP = [rmColumnsP (4*rmBodies(i)-3) (4*rmBodies(i)-2) (4*rmBodies(i)-1) (4*rmBodies(i))];
+            if nKnownVelocityBodies == 0
+                % just an initial velocity analysis
+                Z = zeros(nUnknownVelocityBodies,3*nUnknownVelocityBodies);
+                LHS = [sys.phi_r, sys.phi_p; Z, sys.P];
+                RHS = [  sys.nu ; zeros(nUnknownVelocityBodies,1)];
+                
+                calcVel = LHS\RHS; % solve for unknown velocities
+                rdot = calcVel(1:3*nUnknownVelocityBodies);
+                pdot = calcVel(3*nUnknownVelocityBodies+1:7*nUnknownVelocityBodies);
+            else
+                
+                %%% extract columns of bodies with known velocities
+                phi_r_reduced = sys.phi_r;
+                phi_p_reduced = sys.phi_p;
+                P_reduced = sys.P;
+                rmBodies = find(ismember(freeBodyOrder, knownVelocityBodies)); %find body columns to be removed
+                rmColumnsR = [];
+                rmColumnsP = [];
+                for i = 1:length(rmBodies)
+                    rmColumnsR = [rmColumnsR (3*rmBodies(i)-2) (3*rmBodies(i)-1) (3*rmBodies(i))];
+                    rmColumnsP = [rmColumnsP (4*rmBodies(i)-3) (4*rmBodies(i)-2) (4*rmBodies(i)-1) (4*rmBodies(i))];
+                end
+                phi_r_extracted = phi_r_reduced(:,rmColumnsR); % extract for use in RHS
+                phi_p_extracted = phi_p_reduced(:,rmColumnsP);
+                P_extracted = P_reduced(:,rmColumnsP);
+                phi_r_reduced(:,rmColumnsR) = []; % remove from LHS
+                phi_p_reduced(:,rmColumnsP) = [];
+                P_reduced(:,rmColumnsP) = [];
+                P_reduced(rmBodies,:) = [];
+                
+                %%% assemble known initial velocities
+                rdot_initial = [];
+                pdot_initial = [];
+                for i = 1:nKnownVelocityBodies
+                    rdot_initial = [rdot_initial; sys.body{knownVelocityBodies(i)}.rdot];
+                    pdot_initial = [pdot_initial; sys.body{knownVelocityBodies(i)}.pdot];
+                end
+                
+                %%% velocity analysis
+                Z = zeros(nUnknownVelocityBodies,3*nUnknownVelocityBodies);
+                LHS = [phi_r_reduced phi_p_reduced; Z P_reduced ];
+                
+                nu_initial = sys.nu - phi_r_extracted*rdot_initial - phi_p_extracted*pdot_initial;
+                RHS = [ nu_initial; zeros(nUnknownVelocityBodies,1)];
+                
+                calcVel = LHS\RHS; % solve for unknown velocities
+                calcVel_rdot = calcVel(1:3*nUnknownVelocityBodies);
+                calcVel_pdot = calcVel(3*nUnknownVelocityBodies+1:7*nUnknownVelocityBodies);
+                
+                %%% construct qddot (calculated + prescribed velocities)
+                rdot = sys.rdot; % with prescribed already included
+                pdot = sys.pdot; % with prescribed already included
+                addBodies = find(~ismember(freeBodyOrder, knownVelocityBodies)); %find body columns that were removed
+                for i = 1:length(addBodies)
+                    rdot(3*addBodies(i)-2:3*addBodies(i)) = calcVel_rdot(3*i-2:3*i);
+                    pdot(4*addBodies(i)-3:4*addBodies(i)) = calcVel_pdot(4*i-3:4*i);
+                end
             end
-            phi_r_extracted = phi_r_reduced(:,rmColumnsR); % extract for use in RHS
-            phi_p_extracted = phi_p_reduced(:,rmColumnsP);
-            P_extracted = P_reduced(:,rmColumnsP);
-            phi_r_reduced(:,rmColumnsR) = []; % remove from LHS
-            phi_p_reduced(:,rmColumnsP) = [];
-            P_reduced(:,rmColumnsP) = [];
-            P_reduced(rmBodies,:) = [];
-            
-            %%% assemble known initial velocities
-            rdot_initial = [];
-            pdot_initial = [];
-            for i = 1:nKnownVelocityBodies
-                rdot_initial = [rdot_initial; sys.body{knownVelocityBodies(i)}.rdot];
-                pdot_initial = [pdot_initial; sys.body{knownVelocityBodies(i)}.pdot];
-            end
-            
-            %%% velocity analysis
-            Z = zeros(nUnknownVelocityBodies,3*nUnknownVelocityBodies);
-            LHS = [phi_r_reduced phi_p_reduced; Z P_reduced ];
-            
-            nu_initial = sys.nu - phi_r_extracted*rdot_initial - phi_p_extracted*pdot_initial;
-            RHS = [ nu_initial; zeros(nUnknownVelocityBodies,1)];
-            
-            calcVel = LHS\RHS; % solve for unknown velocities
-            calcVel_rdot = calcVel(1:3*nUnknownVelocityBodies);
-            calcVel_pdot = calcVel(3*nUnknownVelocityBodies+1:7*nUnknownVelocityBodies);
-            
-            %%% construct qddot (calculated + prescribed velocities)
-            rdot = sys.rdot; % with prescribed already included
-            pdot = sys.pdot; % with prescribed already included
-            addBodies = find(~ismember(freeBodyOrder, knownVelocityBodies)); %find body columns to be removed
-            for i = 1:length(addBodies)
-                rdot(3*addBodies(i)-2:3*addBodies(i)) = calcVel_rdot(3*i-2:3*i);
-                pdot(4*addBodies(i)-3:4*addBodies(i)) = calcVel_pdot(4*i-3:4*i);
-            end
-                      
             %%% update system
             sys.updateSystem([],[rdot; pdot],[]); % set system velocities
         end
@@ -440,7 +458,7 @@ classdef system3D < handle
             % configuration for our solution to make sense.
             
             if ~exist('tolerance','var') || isempty(tolerance)
-               tolerance = 10^-5; % default tolerance
+               tolerance = 1e-4; % 1e-5 default tolerance
             end
             
             %%%%%%%%%%
@@ -497,7 +515,7 @@ classdef system3D < handle
                 r_scale = 2; % default maximum iterations
             end
             if ~exist('tolerance','var') || isempty(tolerance)
-                tolerance = 1e-8;  % default tolerance
+                tolerance = 1e-9;  % default tolerance
             end
             if ~exist('maxIterations','var') || isempty(maxIterations)
                 maxIterations = 50; % default maximum iterations
@@ -509,11 +527,11 @@ classdef system3D < handle
             q0 = sys.q;
             
             r = 1; % start value for weighting constant
-                        
+
             % optimization options
-            opt = optimset('fminunc'); 
-            opt = optimset(opt,'display','off');
-            opt = optimset(opt,'GradObj','on');
+            opt = optimoptions('fminunc','Algorithm','trust-region','GradObj','on','FinDiffType','central','FunValCheck','on','TolX',1e-8,'TolFun',1e-8);
+            %opt = optimoptions('fminunc','Algorithm','trust-region','GradObj','on');
+            %opt = optimset(opt,'display','off');
             %warning('off','optim:fminunc:SwitchingMethod');
             
             % iterate as r goes to infinity (eq 4.3.3)
@@ -543,7 +561,7 @@ classdef system3D < handle
                 sys.q
                 % otherwise, iterate
                 q0 = q_new;
-                r = r_scale+r; % r must go to infinity, so ramping seems a fair way to get there.
+                r = r_scale*r; % r must go to infinity, so ramping seems a fair way to get there.
             end
             if j >= maxIterations
                 errormsg = ['Failed to converge assembly analysis, the maximum number of iterations is reached.\n '...
@@ -841,7 +859,7 @@ classdef system3D < handle
                     Cr      = -alpha1*state1.r + -alpha2*state2.r + beta0*h*Crdot;
                     Cp      = -alpha1*state1.p + -alpha2*state2.p + beta0*h*Cpdot;
                 otherwise
-                    error(['BDF of Order ' orderNum ' not implemented yet.']);
+                    error(['BDF of Order ' num2str(orderNum) ' not implemented yet.']);
             end
                 
             
@@ -921,7 +939,7 @@ classdef system3D < handle
                 end
                 
                 % calculate correction
-                deltaZ = psi\-g; 
+                deltaZ = psi\-g;
                 %deltaZ(:,nu) = psi\-g; % for recording instances of deltaZ
                 
                 %%%%%%%%%%%
@@ -943,7 +961,7 @@ classdef system3D < handle
                 nu = nu + 1;
             end
             if nu >= maxIterations % notify of failed convergence
-                warning(['Did not converge in Quasi-Newton iteration, BDF1. Time = ' num2str(sys.time)]);
+                warning(['Did not converge in Quasi-Newton iteration, BDF' num2str(orderNum) '. Time = ' num2str(sys.time)]);
                 disp('but we are going on, baby!');
             end
             
@@ -1605,6 +1623,9 @@ classdef system3D < handle
             for i = 1:sys.nFreeBodies
                 nForces = nForces + sys.body{bodyID(i)}.nForces;
             end
+        end
+        function nTSDAs = get.nTSDAs(sys) % count number of TSDA objects in system
+            nTSDAs = length(sys.tsda);
         end
         function r = get.r(sys) % vector of positions of the bodies
             r = sys.q(1:3*(sys.nFreeBodies));

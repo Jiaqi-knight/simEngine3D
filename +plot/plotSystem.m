@@ -84,6 +84,13 @@ for i = 1:sys.nBodies % plot bodies in system
         end
     end
 end
+if sys.nTSDAs > 0 % plot TSDAs, if you have them
+    for i = 1:sys.nTSDAs
+        Pi = sys.tsda{i}.bodyi.r + sys.tsda{i}.bodyi.A*sys.tsda{i}.bodyi.point{sys.tsda{i}.Pi};
+        Qj = sys.tsda{i}.bodyj.r + sys.tsda{i}.bodyj.A*sys.tsda{i}.bodyj.point{sys.tsda{i}.Qj};
+        plot3([Pi(1);Qj(1)],[Pi(2);Qj(2)],[Pi(3);Qj(3)],'m:','LineWidth',5)
+    end
+end
 hold off;
 axis equal
 end

@@ -20,8 +20,10 @@ classdef rcj < handle
         bodyj;  % body j
         hBari_tail; % ID number for point aBari_tail on body i, tail of hBari vector
         hBari_head; % ID number for point aBari_head on body i, head of hBari vector
-        bBari_tail; % ID number for point bBari_tail on body i, tail of bBari vector
-        bBari_head; % ID number for point bBari_head on body i, head of bBari vector
+        aBarj_tail; % ID number for point aBarj_tail on body j, tail of aBarj vector
+        aBarj_head; % ID number for point aBarj_head on body j, head of aBarj vector
+        bBarj_tail; % ID number for point bBarj_tail on body j, tail of bBarj vector
+        bBarj_head; % ID number for point bBarj_head on body j, head of bBarj vector
         hBarj_tail; % ID number for point hBarj_tail on body j, tail of hBarj vector
         hBarj_head; % ID number for point hBarj_head on body j, head of hBarj vector
         Pi;         % ID number for point P on body i, tail of PiQj vector
@@ -38,25 +40,31 @@ classdef rcj < handle
     
     methods
         %constructor function
-        function cons = rcj(system,bodyi,hBari_tail,hBari_head,bBari_tail,bBari_head,PiID,bodyj,hBarj_tail,hBarj_head,QjID) %constructor function
+        function cons = rcj(system,bodyi,hBari_tail,hBari_head,PiID,bodyj,hBarj_tail,hBarj_head,aBarj_tail,aBarj_head,bBarj_tail,bBarj_head,QjID) %constructor function
             cons.system = system;
             cons.bodyi = bodyi;
             cons.hBari_tail = hBari_tail;
             cons.hBari_head = hBari_head;
-            cons.bBari_tail = bBari_tail;
-            cons.bBari_head = bBari_head;
             cons.Pi = PiID;
             cons.bodyj = bodyj;
             cons.hBarj_tail = hBarj_tail;
             cons.hBarj_head = hBarj_head;
+            cons.aBarj_tail = aBarj_tail;
+            cons.aBarj_head = aBarj_head;
+            cons.bBarj_tail = bBarj_tail;
+            cons.bBarj_head = bBarj_head;
             cons.Qj = QjID;
             
             % create cell array of all sub constraints
+            
+            %enforce hi and hj are orthogonal
             cons.subCons{1} = constraint.dp1(cons.system,cons.bodyi,cons.hBari_tail,cons.hBari_head,cons.bodyj,cons.hBarj_tail,cons.hBarj_head);
-            cons.subCons{2} = constraint.p2(cons.system,cons.bodyi,cons.hBari_tail,cons.hBari_head,cons.bBari_tail,cons.bBari_head,cons.Pi,cons.bodyj,cons.Qj);
-                
+            
+            %enforce hj passes through point Pi
+            cons.subCons{2} = constraint.p2(cons.system,cons.bodyj,cons.aBarj_tail,cons.aBarj_head,cons.bBarj_tail,cons.bBarj_head,cons.Qj,cons.bodyi,cons.Pi);
+            
             if abs(cons.phi) > 1e-4
-                warning('Initial conditions for ''sj'' are not consistent. But solution will converge so constraints are satisfied.')
+                warning('Initial conditions for ''rcj'' are not consistent. But solution will converge so constraints are satisfied.')
             end
         end        
         function phi = get.phi(cons) % value of the expression of the constraint PHI^sj

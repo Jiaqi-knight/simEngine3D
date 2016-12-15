@@ -76,6 +76,7 @@ sys.body{2}.addPoint([0;0;1]); % body 2, point 2
 sys.body{2}.addPoint([-2;0;0]); % body 2, point 3
 sys.body{2}.addPoint([2;0;0]); % body 2, point 4
 sys.body{2}.addPoint([0;-1;0]); % body 2, point 5
+sys.body{2}.addPoint([1;0;0]); % body 2, point 5
 
 sys.body{3}.addPoint([-1;0;0]); % body 3, point 1
 sys.body{3}.addPoint([0;0;0]); % body 3, point 2
@@ -97,12 +98,22 @@ sys.addConstraint('rj',sys.body{1},1,1,2,1,3,sys.body{2},3,1,2)
 % revolute joint body 3 to body 2
 sys.addConstraint('rj',sys.body{2},4,1,4,1,5,sys.body{3},1,2,3)
 
+
+
+% % Optional: uses dp1 constraint to specify angle of pendulum
+% f = @(t)pi*cos(2*t - pi/2)/4;
+% fdot = @(t)(-(pi*sin(2*t - pi/2))/2);
+% fddot = @(t)(-pi*cos(2*t - pi/2));
+% sys.addConstraint('dp1',sys.body{1},1,2,sys.body{2},1,5,f,fdot,fddot) % unit length vectors
+% 
+
 % EULER PARAMETER NORMALIZATION CONSTRAINTS
 sys.addEulerParamConstraints(); 
 
 %% ASSEMBLE CONSTRAINT MATRIX 
 sys.assembleConstraints()
 
+sys.setInitialVelocities();
 %% ADD FORCES
 sys.addGravityForces();
 
@@ -115,7 +126,7 @@ tic
 state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep,'QN');
 timeQN = toc;
 
-save('state_simplePendulum.mat','state')
+%save('state_doublelePendulum.mat','state')
 disp('done with dynamics analysis.')
 disp(['For step-size h=' num2str(timeStep) ' seconds,'])
 disp(['Time to compute Quasi-Newton Solution: ' num2str(timeQN) ' seconds'])
@@ -123,5 +134,115 @@ disp(['Time to compute Quasi-Newton Solution: ' num2str(timeQN) ' seconds'])
 %% ANIMATION OF SYSTEM
 % play animation of the dynamics analysis
 plot.animateSystem(sys,state);
+%%
+plot.bodyTrace(2,state); % comet plot of outer pendulum
+
+%% PLOT KINEMATICS
+
+time = timeStart:timeStep:timeEnd;
+
+% kinematics for pendulum, the Oprime frame, BODY 2
+rOprime2 = zeros(length(state),3); % preallocate for speed
+rdotOprime2 = zeros(length(state),3);
+rddotOprime2 = zeros(length(state),3);
+for i = 1:length(state)
+    rOprime2(i,1) = state{i}.r(1); % x value of rOprime2
+    rOprime2(i,2) = state{i}.r(2); % y value of rOprime2
+    rOprime2(i,3) = state{i}.r(3); % z value of rOprime2
+    rdotOprime2(i,1) = state{i}.rdot(1); % xdot value of rOprime2
+    rdotOprime2(i,2) = state{i}.rdot(2); % ydot value of rOprime2
+    rdotOprime2(i,3) = state{i}.rdot(3); % zdot value of rOprime2
+    rddotOprime2(i,1) = state{i}.rddot(1); % xddot value of rOprime2
+    rddotOprime2(i,2) = state{i}.rddot(2); % yddot value of rOprime2
+    rddotOprime2(i,3) = state{i}.rddot(3); % zddot value of rOprime2
+end
+
+% plot position, velocity, acceleration of Oprime, BODY 2
+figure 
+subplot(3,1,1)
+hold on
+plot(time,rOprime2(:,1))
+plot(time,rOprime2(:,2))
+plot(time,rOprime2(:,3))
+title('Position of Body 2')
+xlabel('Time (sec)')
+ylabel('Position (m)')
+legend('X','Y','Z')
+hold off
+
+subplot(3,1,2)
+hold on
+plot(time,rdotOprime2(:,1))
+plot(time,rdotOprime2(:,2))
+plot(time,rdotOprime2(:,3))
+title('Velocity of Body 2')
+xlabel('Time (sec)')
+ylabel('Velocity (m/s)')
+legend('X','Y','Z')
+hold off
+
+subplot(3,1,3)
+hold on
+plot(time,rddotOprime2(:,1))
+plot(time,rddotOprime2(:,2))
+plot(time,rddotOprime2(:,3))
+title('Acceleration of Body 2')
+xlabel('Time (sec)')
+ylabel('Acceleration (m/s^2)')
+legend('X','Y','Z')
+hold off
+
+
+%% kinematics for pendulum, the Oprime frame, BODY 3
+rOprime3 = zeros(length(state),3); % preallocate for speed
+rdotOprime3 = zeros(length(state),3);
+rddotOprime3 = zeros(length(state),3);
+for i = 1:length(state)
+    rOprime3(i,1) = state{i}.r(4); % x value of rOprime3
+    rOprime3(i,2) = state{i}.r(5); % y value of rOprime3
+    rOprime3(i,3) = state{i}.r(6); % z value of rOprime3
+    rdotOprime3(i,1) = state{i}.rdot(4); % xdot value of rOprime3
+    rdotOprime3(i,2) = state{i}.rdot(5); % ydot value of rOprime3
+    rdotOprime3(i,3) = state{i}.rdot(6); % zdot value of rOprime3
+    rddotOprime3(i,1) = state{i}.rddot(4); % xddot value of rOprime3
+    rddotOprime3(i,2) = state{i}.rddot(5); % yddot value of rOprime3
+    rddotOprime3(i,3) = state{i}.rddot(6); % zddot value of rOprime3
+end
+
+
+% plot position, velocity, acceleration of Oprime, BODY 3
+figure 
+subplot(3,1,1)
+hold on
+plot(time,rOprime3(:,1))
+plot(time,rOprime3(:,2))
+plot(time,rOprime3(:,3))
+title('Position of Body 3')
+xlabel('Time (sec)')
+ylabel('Position (m)')
+legend('X','Y','Z')
+hold off
+
+subplot(3,1,2)
+hold on
+plot(time,rdotOprime3(:,1))
+plot(time,rdotOprime3(:,2))
+plot(time,rdotOprime3(:,3))
+title('Velocity of Body 3')
+xlabel('Time (sec)')
+ylabel('Velocity (m/s)')
+legend('X','Y','Z')
+hold off
+
+subplot(3,1,3)
+hold on
+plot(time,rddotOprime3(:,1))
+plot(time,rddotOprime3(:,2))
+plot(time,rddotOprime3(:,3))
+title('Acceleration of Body 3')
+xlabel('Time (sec)')
+ylabel('Acceleration (m/s^2)')
+legend('X','Y','Z')
+hold off
 
 

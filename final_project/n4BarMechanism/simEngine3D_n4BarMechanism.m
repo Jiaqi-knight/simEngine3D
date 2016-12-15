@@ -23,7 +23,7 @@ sys = system3D(); %initialize system
 
 %% DEFINE BODIES IN THE SYSTEM %%
 
-N = 1; % N four-bar linkages
+N = 2; % N four-bar linkages
 l_link = 1; % meters. Length of a link
 m_link = 1; %kg. Mass of a link
 J_link = 1/12*m_link*l_link^2; % inertia of long, slender rod.
@@ -137,10 +137,16 @@ tic
 state = sys.dynamicsAnalysis(timeStart,timeEnd,timeStep,'QN');
 timeQN = toc;
 
-%save('state_N1_h3_n4BarMechanism.mat','state')
+%save('state_N2_h3_n4BarMechanism.mat','state')
 disp('done with dynamics analysis.')
 disp(['For step-size h=' num2str(timeStep) ' seconds, and N = ' num2str(N) ','])
 disp(['Time to compute Quasi-Newton Solution: ' num2str(timeQN) ' seconds'])
+
+
+%% ANIMATION OF SYSTEM
+%play animation of the dynamics analysis
+plot.animateSystem(sys,state,[0 90],10);
+
 
 %% COMPARE WITH BENCHMARK
 
@@ -231,9 +237,5 @@ disp(['Y coordinate: There are ' num2str(nlpc_y) ' entries outside of allowable 
 
 
 
-
-%% ANIMATION OF SYSTEM
-%play animation of the dynamics analysis
-plot.animateSystem(sys,state);
 
 
